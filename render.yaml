@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: evaratap-blynk-dashboard
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BLYNK_AUTH_TOKEN
+        sync: false # IMPORTANT: Set this in your Render dashboard

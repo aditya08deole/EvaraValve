@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EvaraTap Smart Flow Control</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #3498db; --secondary-color: #2c3e50;
+            --success-color: #2ecc71; --danger-color: #e74c3c;
+            --light-bg: #f8f9fa; --border-color: #e9ecef;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d); color: #333; min-height: 100vh; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 30px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        h1 { font-size: 2.5rem; margin-bottom: 10px; }
+        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        @media (max-width: 768px) { .dashboard { grid-template-columns: 1fr; } }
+        .card { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); position: relative; }
+        .card.online-device { border-left: 5px solid var(--success-color); }
+        .card.offline-device { border-left: 5px solid var(--danger-color); }
+        .card-title { font-size: 1.5rem; margin-bottom: 15px; color: var(--secondary-color); text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .device-status-indicator { position: absolute; top: 15px; right: 20px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+        .device-status-indicator.online { background-color: var(--success-color); color: white; animation: pulse 2s infinite; }
+        .device-status-indicator.offline { background-color: var(--danger-color); color: white; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(46, 204, 113, 0); } 100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); } }
+        .notification { position: fixed; top: 20px; right: 20px; background: var(--success-color); color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateX(120%); transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); z-index: 1001; font-weight: 500; }
+        .notification.show { transform: translateX(0); }
+        .notification.error { background: var(--danger-color); }
+        .notification.info { background: var(--primary-color); }
+        .status-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; margin-bottom: 10px; background: var(--light-bg); border-radius: 8px; font-size: 14px; border: 1px solid var(--border-color); }
+        .status-label { font-weight: 500; color: var(--secondary-color); }
+        .status-value { font-weight: 700; color: var(--text-color); }
+        .status-value.open { color: var(--success-color); }
+        .status-value.closed { color: var(--danger-color); }
+        .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(231, 76, 60, 0.1); backdrop-filter: blur(2px); z-index: 1000; display: none; align-items: center; justify-content: center; text-align: center; color: var(--danger-color); font-size: 1.5rem; font-weight: bold; }
+        body.safety-lockdown .safety-lockdown-overlay { display: flex; }
+        body.safety-lockdown .btn, body.safety-lockdown .limit-set-btn { cursor: not-allowed; filter: grayscale(80%); pointer-events: none; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .btn { padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-open { background: linear-gradient(to right, #2ecc71, #27ae60); color: white; }
+        .btn-close { background: linear-gradient(to right, #e74c3c, #c0392b); color: white; }
+        .btn:disabled { background: #95a5a6; cursor: not-allowed; opacity: 0.7; }
+        .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 7px 10px rgba(0,0,0,0.2); }
+        .flow-display { text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; margin-bottom: 20px; }
+        .flow-value { font-size: 3rem; font-weight: bold; margin-bottom: 5px; }
+        .flow-unit { font-size: 1.2rem; opacity: 0.9; }
+        .gauge-wrapper { position: relative; width: 100%; margin: 0 auto 20px; }
+        .gauge-container { position: relative; width: 100%; height: 180px; margin: 0 auto; }
+        .gauge-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .gauge-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .gauge-value { font-size: 2.5rem; font-weight: bold; color: var(--secondary-color); margin-bottom: 5px; }
+        .gauge-label { font-size: 1.2rem; color: #7f8c8d; }
+        .limit-config-panel { margin-top: 20px; background: var(--light-bg); border-radius: 12px; padding: 20px; border: 1px solid var(--border-color); }
+        .config-header { font-size: 1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 15px; }
+        .input-group { display: flex; gap: 12px; align-items: center; }
+        .limit-input { flex: 1; border: 1px solid var(--border-color); background: white; padding: 12px 15px; font-size: 1rem; font-weight: 600; color: #333; outline: none; border-radius: 8px; transition: all 0.3s ease; }
+        .limit-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2); }
+        .limit-set-btn { background: var(--primary-color); color: white; border: none; border-radius: 8px; padding: 12px 20px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
+        .limit-set-btn:hover:not(:disabled) { background: #2980b9; }
+        .reset-buttons { display: flex; gap: 10px; margin-top: 15px; justify-content: center; }
+        .btn-small-reset { padding: 8px 16px; font-size: 0.8rem; background: linear-gradient(to right, #3498db, #2980b9); color: white; border: none; border-radius: 50px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="safety-lockdown-overlay">
+        <div>
+            🛡️ SAFETY LOCKDOWN<br>
+            <small style="font-size: 1rem; font-weight: 400;">Device is offline. Controls disabled.</small>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>🌊 EvaraTap Smart Flow Control</h1>
+            <p>High-Performance IoT Water Management</p>
+        </header>
+        
+        <div class="dashboard">
+            <!-- Flow Control Card -->
+            <div class="card" id="flowCard">
+                <div class="device-status-indicator" id="deviceStatus">CONNECTING</div>
+                <h2 class="card-title">💧 Flow Control</h2>
+                
+                <div class="flow-display">
+                    <div class="flow-value" id="flowRate">--.--</div>
+                    <div class="flow-unit">L/min</div>
+                </div>
+                
+                <div class="status-item">
+                    <span class="status-label">Valve Status</span>
+                    <span class="status-value" id="valveStatus">UNKNOWN</span>
+                </div>
+                
+                <div class="controls">
+                    <button class="btn btn-open" id="openBtn">OPEN VALVE</button>
+                    <button class="btn btn-close" id="closeBtn">CLOSE VALVE</button>
+                </div>
+            </div>
+            
+            <!-- Volume Analytics Card -->
+            <div class="card">
+                <h2 class="card-title">📊 Volume Analytics</h2>
+                
+                <div class="gauge-wrapper">
+                    <div class="gauge-container">
+                        <canvas id="volumeGauge" class="gauge-canvas"></canvas>
+                        <div class="gauge-text">
+                            <div class="gauge-value" id="totalVolumeDisplay">--.- L</div>
+                            <div class="gauge-label">Total Volume</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-item">
+                    <span class="status-label">Volume Limit</span>
+                    <span class="status-value" id="volumeLimitDisplay">--.-- L</span>
+                </div>
+
+                <div class="limit-config-panel">
+                    <div class="config-header">Set Auto-Shutoff Limit</div>
+                    <div class="input-group">
+                        <input type="number" class="limit-input" id="volumeLimitInput" placeholder="e.g., 100" min="1" max="9999">
+                        <button class="limit-set-btn" id="setLimitBtn">SET</button>
+                    </div>
+                </div>
+
+                <div class="reset-buttons">
+                    <button class="btn btn-small-reset" id="resetVolumeBtn">RESET TOTAL VOLUME</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- VIRTUAL PINS MAPPING (Corrected to Uppercase) ---
+        const VPIN = {
+            TOTAL_VOLUME: 'V0', FLOW_RATE: 'V1', VALVE_STATUS: 'V2',
+            VOLUME_LIMIT: 'V4', ONLINE_STATUS: 'V5', CMD_OPEN_VALVE: 'V10',
+            CMD_CLOSE_VALVE: 'V11', CMD_RESET_VOLUME: 'V12', CMD_SET_LIMIT: 'V13'
+        };
+
+        const DOMElements = {
+            deviceStatus: document.getElementById('deviceStatus'),
+            flowRate: document.getElementById('flowRate'),
+            valveStatus: document.getElementById('valveStatus'),
+            totalVolumeDisplay: document.getElementById('totalVolumeDisplay'),
+            volumeLimitDisplay: document.getElementById('volumeLimitDisplay'),
+            volumeLimitInput: document.getElementById('volumeLimitInput'),
+            openBtn: document.getElementById('openBtn'),
+            closeBtn: document.getElementById('closeBtn'),
+            setLimitBtn: document.getElementById('setLimitBtn'),
+            resetVolumeBtn: document.getElementById('resetVolumeBtn'),
+            flowCard: document.getElementById('flowCard')
+        };
+
+        let lastDeviceOnlineTime = 0;
+        let lockdownActive = false;
+        let volumeChart = null;
+        const SAFETY_OFFLINE_THRESHOLD = 15000;
+
+        // Secure API request function that talks to YOUR backend proxy
+        async function apiRequest(endpoint, options = {}) {
+            try {
+                // The URL '/api/...' assumes your backend serves these endpoints
+                const response = await fetch(`/api/${endpoint}`, options);
+                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+                return response.json();
+            } catch (error) {
+                console.error(`API Error (${endpoint}):`, error);
+                updateOnlineStatus(false);
+                throw error;
+            }
+        }
+
+        const getBlynkPinValues = (pins) => apiRequest(`get-pins?pins=${pins.join(',')}`);
+        const updateBlynkPinValue = (pin, value) => apiRequest('update-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin, value })
+        });
+
+        function updateOnlineStatus(isOnline) {
+            const now = Date.now();
+            if (isOnline) {
+                lastDeviceOnlineTime = now;
+                if (lockdownActive) unlockSystemSafety();
+                DOMElements.deviceStatus.textContent = 'ONLINE';
+                DOMElements.deviceStatus.className = 'device-status-indicator online';
+                DOMElements.flowCard.className = 'card online-device';
+            } else {
+                DOMElements.deviceStatus.textContent = 'OFFLINE';
+                DOMElements.deviceStatus.className = 'device-status-indicator offline';
+                DOMElements.flowCard.className = 'card offline-device';
+                if (now - lastDeviceOnlineTime > SAFETY_OFFLINE_THRESHOLD && !lockdownActive) {
+                    lockSystemSafety();
+                }
+            }
+        }
+
+        function lockSystemSafety() {
+            if (lockdownActive) return;
+            lockdownActive = true;
+            document.body.classList.add('safety-lockdown');
+            showNotification('Device offline! Controls locked for safety.', 'error');
+            DOMElements.valveStatus.textContent = 'UNKNOWN';
+            DOMElements.valveStatus.className = 'status-value';
+        }
+
+        function unlockSystemSafety() {
+            if (!lockdownActive) return;
+            lockdownActive = false;
+            document.body.classList.remove('safety-lockdown');
+            showNotification('Device reconnected! Controls are active.', 'info');
+        }
+
+        function updateUI(data) {
+            let currentVolume = parseFloat(DOMElements.totalVolumeDisplay.textContent.split(' ')[0]) || 0;
+            let currentLimit = parseFloat(DOMElements.volumeLimitDisplay.textContent.split(' ')[0]) || 100;
+
+            if (data[VPIN.TOTAL_VOLUME] !== undefined) {
+                currentVolume = parseFloat(data[VPIN.TOTAL_VOLUME]);
+                DOMElements.totalVolumeDisplay.textContent = `${currentVolume.toFixed(1)} L`;
+            }
+            if (data[VPIN.FLOW_RATE] !== undefined) {
+                DOMElements.flowRate.textContent = parseFloat(data[VPIN.FLOW_RATE]).toFixed(2);
+            }
+            if (data[VPIN.VALVE_STATUS] !== undefined) {
+                const isOpen = parseInt(data[VPIN.VALVE_STATUS]) === 1;
+                DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
+                DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
+                DOMElements.openBtn.disabled = isOpen;
+                DOMElements.closeBtn.disabled = !isOpen;
+            }
+            if (data[VPIN.VOLUME_LIMIT] !== undefined) {
+                currentLimit = parseFloat(data[VPIN.VOLUME_LIMIT]);
+                DOMElements.volumeLimitDisplay.textContent = `${currentLimit.toFixed(1)} L`;
+                if (document.activeElement !== DOMElements.volumeLimitInput) {
+                    DOMElements.volumeLimitInput.value = currentLimit;
+                }
+            }
+            updateGauge(currentVolume, currentLimit);
+        }
+
+        function showNotification(message, type = 'info') {
+            const existing = document.querySelector('.notification');
+            if (existing) existing.remove();
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.classList.add('show'), 100);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 500);
+            }, 3000);
+        }
+
+        async function fetchAllData() {
+            try {
+                const pinsToFetch = [VPIN.TOTAL_VOLUME, VPIN.FLOW_RATE, VPIN.VALVE_STATUS, VPIN.VOLUME_LIMIT, VPIN.ONLINE_STATUS];
+                const data = await getBlynkPinValues(pinsToFetch);
+                const isOnline = parseInt(data[VPIN.ONLINE_STATUS]) === 1;
+                updateOnlineStatus(isOnline);
+                if (isOnline) updateUI(data);
+            } catch (error) {
+                // apiRequest already handles setting offline status
+            }
+        }
+
+        function initializeGauge() {
+            const ctx = document.getElementById('volumeGauge').getContext('2d');
+            volumeChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [0, 100], backgroundColor: ['#3498db', '#ecf0f1'],
+                        borderWidth: 0, borderRadius: 8,
+                        circumference: 270, rotation: -135
+                    }]
+                },
+                options: {
+                    cutout: '70%', plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        function updateGauge(current, max) {
+            if (!volumeChart || max <= 0) return;
+            const percentage = Math.min((current / max) * 100, 100);
+            volumeChart.data.datasets[0].data = [percentage, 100 - percentage];
+            volumeChart.update('none');
+        }
+
+        function setupEventListeners() {
+            DOMElements.openBtn.addEventListener('click', () => {
+                // UX ENHANCEMENT: Show immediate feedback to the user
+                showNotification('Sending OPEN command...', 'info');
+                updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1).catch(err => showNotification('Command failed', 'error'));
+            });
+            DOMElements.closeBtn.addEventListener('click', () => {
+                // UX ENHANCEMENT: Show immediate feedback to the user
+                showNotification('Sending CLOSE command...', 'info');
+                updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1).catch(err => showNotification('Command failed', 'error'));
+            });
+            DOMElements.resetVolumeBtn.addEventListener('click', () => {
+                // NOTE: The native confirm() box is used here. For a more polished UI,
+                // you might replace this with a custom modal dialog.
+                if (confirm('Are you sure you want to reset the total volume?')) {
+                    // UX ENHANCEMENT: Show immediate feedback to the user
+                    showNotification('Resetting volume...', 'info');
+                    updateBlynkPinValue(VPIN.CMD_RESET_VOLUME, 1).catch(err => showNotification('Reset failed', 'error'));
+                }
+            });
+            DOMElements.setLimitBtn.addEventListener('click', () => {
+                const limit = parseFloat(DOMElements.volumeLimitInput.value);
+                if (isNaN(limit) || limit < 1) {
+                    showNotification('Please enter a valid limit.', 'error'); return;
+                }
+                // UX ENHANCEMENT: Show immediate feedback to the user
+                showNotification(`Setting limit to ${limit} L...`, 'info');
+                updateBlynkPinValue(VPIN.CMD_SET_LIMIT, limit)
+                    .then(() => showNotification('Limit updated successfully!', 'success'))
+                    .catch(err => showNotification('Failed to set limit', 'error'));
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeGauge();
+            setupEventListeners();
+            fetchAllData(); // Fetch initial data on load
+            setInterval(fetchAllData, 2000); // Poll for new data every 2 seconds
+        });
+    </script>
+</body>
+</html>

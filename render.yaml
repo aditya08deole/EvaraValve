@@ -3,10 +3,13 @@ services:
     name: evaratap-blynk-dashboard
     runtime: node
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    # The build command explicitly uses npm. The --force flag helps resolve conflicts.
+    buildCommand: "npm install --force" 
+    startCommand: "npm start"
     envVars:
       - key: NODE_ENV
         value: production
       - key: BLYNK_AUTH_TOKEN
-        sync: false # IMPORTANT: Set this in your Render dashboard
+        # This value MUST be set in your Render dashboard Environment tab
+        sync: false 
+

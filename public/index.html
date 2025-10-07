@@ -167,7 +167,7 @@
         let currentFlowRate = 0;
         let currentTotalVolume = 0;
         let deviceDataTimeout = null; // NEW: Timer for device data
-        const DEVICE_OFFLINE_THRESHOLD = 45000; // NEW: 45 seconds timeout
+        const DEVICE_OFFLINE_THRESHOLD = 15000; // NEW: 15 seconds timeout
 
         // --- WEBSOCKET CONNECTION LOGIC ---
         function connectWebSocket() {

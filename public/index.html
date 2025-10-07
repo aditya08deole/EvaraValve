@@ -18,7 +18,7 @@
         h1 { font-size: 2.5rem; margin-bottom: 10px; }
         .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
         @media (max-width: 768px) { .dashboard { grid-template-columns: 1fr; } }
-        .card { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); position: relative; }
+        .card { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); position: relative; transition: border-left 0.3s ease; }
         .card.online-device { border-left: 5px solid var(--success-color); }
         .card.offline-device { border-left: 5px solid var(--danger-color); }
         .card-title { font-size: 1.5rem; margin-bottom: 15px; color: var(--secondary-color); text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; }
@@ -26,7 +26,7 @@
         .device-status-indicator.online { background-color: var(--success-color); color: white; animation: pulse 2s infinite; }
         .device-status-indicator.offline { background-color: var(--danger-color); color: white; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(46, 204, 113, 0); } 100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); } }
-        .notification { position: fixed; top: 20px; right: 20px; background: var(--success-color); color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateX(120%); transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); z-index: 1001; font-weight: 500; }
+        .notification { position: fixed; top: 20px; right: 20px; background: var(--success-color); color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateX(120%); transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); z-index: 1002; font-weight: 500; }
         .notification.show { transform: translateX(0); }
         .notification.error { background: var(--danger-color); }
         .notification.info { background: var(--primary-color); }
@@ -35,8 +35,8 @@
         .status-value { font-weight: 700; color: var(--text-color); }
         .status-value.open { color: var(--success-color); }
         .status-value.closed { color: var(--danger-color); }
-        .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; font-size: 1.5rem; font-weight: bold; flex-direction: column; transition: opacity 0.3s ease; }
-        body:not(.safety-lockdown) .safety-lockdown-overlay { display: none; }
+        .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; font-size: 1.5rem; font-weight: bold; flex-direction: column; transition: opacity 0.3s ease; opacity: 0; pointer-events: none; }
+        body.safety-lockdown .safety-lockdown-overlay { opacity: 1; pointer-events: auto; }
         .lockdown-message small { font-size: 1rem; font-weight: 400; color: #bdc3c7; margin-top: 10px; display: block; }
         body.safety-lockdown .btn, body.safety-lockdown .limit-set-btn { cursor: not-allowed; filter: grayscale(80%); pointer-events: none; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
@@ -63,14 +63,38 @@
         .limit-set-btn:hover:not(:disabled) { background: #2980b9; }
         .reset-buttons { display: flex; gap: 10px; margin-top: 15px; justify-content: center; }
         .btn-small-reset { padding: 8px 16px; font-size: 0.8rem; background: linear-gradient(to right, #3498db, #2980b9); color: white; border: none; border-radius: 50px; cursor: pointer; }
+        
+        /* --- NEW: Custom Confirmation Modal --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1001; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal-content { background: white; padding: 30px; border-radius: 15px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transform: scale(0.9); transition: transform 0.3s ease; }
+        .modal-overlay.show .modal-content { transform: scale(1); }
+        .modal-title { font-size: 1.5rem; color: var(--secondary-color); margin-bottom: 15px; }
+        .modal-body { font-size: 1rem; color: #555; margin-bottom: 25px; }
+        .modal-buttons { display: flex; justify-content: center; gap: 15px; }
+        .modal-btn { padding: 12px 25px; border-radius: 50px; font-weight: 600; cursor: pointer; border: none; }
+        .modal-btn-confirm { background: var(--danger-color); color: white; }
+        .modal-btn-cancel { background: #ccc; color: #333; }
     </style>
 </head>
 <body>
-
+    
     <div class="safety-lockdown-overlay">
         <div class="lockdown-message">
             🛡️ CONNECTING...
             <small>Establishing secure connection to the server.</small>
+        </div>
+    </div>
+    
+    <!-- NEW: Custom Confirmation Modal HTML -->
+    <div class="modal-overlay" id="confirmationModal">
+        <div class="modal-content">
+            <h3 class="modal-title" id="modalTitle">Are you sure?</h3>
+            <p class="modal-body" id="modalBody">This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="modalCancelBtn">Cancel</button>
+                <button class="modal-btn modal-btn-confirm" id="modalConfirmBtn">Confirm</button>
+            </div>
         </div>
     </div>
 
@@ -85,89 +109,48 @@
             <div class="card" id="flowCard">
                 <div class="device-status-indicator" id="deviceStatus">CONNECTING</div>
                 <h2 class="card-title">💧 Flow Control</h2>
-                
-                <div class="flow-display">
-                    <div class="flow-value" id="flowRate">--.--</div>
-                    <div class="flow-unit">L/min</div>
-                </div>
-                
-                <div class="status-item">
-                    <span class="status-label">Valve Status</span>
-                    <span class="status-value" id="valveStatus">UNKNOWN</span>
-                </div>
-                
-                <div class="controls">
-                    <button class="btn btn-open" id="openBtn">OPEN VALVE</button>
-                    <button class="btn btn-close" id="closeBtn">CLOSE VALVE</button>
-                </div>
+                <div class="flow-display"><div class="flow-value" id="flowRate">--.--</div><div class="flow-unit">L/min</div></div>
+                <div class="status-item"><span class="status-label">Valve Status</span><span class="status-value" id="valveStatus">UNKNOWN</span></div>
+                <div class="controls"><button class="btn btn-open" id="openBtn">OPEN VALVE</button><button class="btn btn-close" id="closeBtn">CLOSE VALVE</button></div>
             </div>
             
             <!-- Volume Analytics Card -->
             <div class="card">
                 <h2 class="card-title">📊 Volume Analytics</h2>
-                
                 <div class="gauge-wrapper">
                     <div class="gauge-container">
                         <canvas id="volumeGauge" class="gauge-canvas"></canvas>
-                        <div class="gauge-text">
-                            <div class="gauge-value" id="totalVolumeDisplay">--.- L</div>
-                            <div class="gauge-label">Total Volume</div>
-                        </div>
+                        <div class="gauge-text"><div class="gauge-value" id="totalVolumeDisplay">--.- L</div><div class="gauge-label">Total Volume</div></div>
                     </div>
                 </div>
-
-                <div class="status-item">
-                    <span class="status-label">Volume Limit</span>
-                    <span class="status-value" id="volumeLimitDisplay">--.-- L</span>
-                </div>
-
+                <div class="status-item"><span class="status-label">Volume Limit</span><span class="status-value" id="volumeLimitDisplay">--.-- L</span></div>
                 <div class="limit-config-panel">
                     <div class="config-header">Set Auto-Shutoff Limit</div>
-                    <div class="input-group">
-                        <input type="number" class="limit-input" id="volumeLimitInput" placeholder="e.g., 100" min="1" max="9999">
-                        <button class="limit-set-btn" id="setLimitBtn">SET</button>
-                    </div>
+                    <div class="input-group"><input type="number" class="limit-input" id="volumeLimitInput" placeholder="e.g., 100" min="1" max="9999"><button class="limit-set-btn" id="setLimitBtn">SET</button></div>
                 </div>
-
-                <div class="reset-buttons">
-                    <button class="btn btn-small-reset" id="resetVolumeBtn">RESET TOTAL VOLUME</button>
-                </div>
+                <div class="reset-buttons"><button class="btn btn-small-reset" id="resetVolumeBtn">RESET TOTAL VOLUME</button></div>
             </div>
         </div>
     </div>
 
     <script>
         // --- VIRTUAL PINS MAPPING ---
-        const VPIN = {
-            TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2',
-            VOLUME_LIMIT: 'v4', ONLINE_STATUS: 'v5', CMD_OPEN_VALVE: 'V10',
-            CMD_CLOSE_VALVE: 'V11', CMD_RESET_VOLUME: 'V12', CMD_SET_LIMIT: 'V13'
-        };
+        const VPIN = { TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2', VOLUME_LIMIT: 'v4', ONLINE_STATUS: 'v5', CMD_OPEN_VALVE: 'V10', CMD_CLOSE_VALVE: 'V11', CMD_RESET_VOLUME: 'V12', CMD_SET_LIMIT: 'V13' };
 
         const DOMElements = {
-            deviceStatus: document.getElementById('deviceStatus'),
-            flowRate: document.getElementById('flowRate'),
-            valveStatus: document.getElementById('valveStatus'),
-            totalVolumeDisplay: document.getElementById('totalVolumeDisplay'),
-            volumeLimitDisplay: document.getElementById('volumeLimitDisplay'),
-            volumeLimitInput: document.getElementById('volumeLimitInput'),
-            openBtn: document.getElementById('openBtn'),
-            closeBtn: document.getElementById('closeBtn'),
-            setLimitBtn: document.getElementById('setLimitBtn'),
-            resetVolumeBtn: document.getElementById('resetVolumeBtn'),
-            flowCard: document.getElementById('flowCard'),
-            lockdownOverlayMessage: document.querySelector('.lockdown-message')
+            deviceStatus: document.getElementById('deviceStatus'), flowRate: document.getElementById('flowRate'), valveStatus: document.getElementById('valveStatus'),
+            totalVolumeDisplay: document.getElementById('totalVolumeDisplay'), volumeLimitDisplay: document.getElementById('volumeLimitDisplay'),
+            volumeLimitInput: document.getElementById('volumeLimitInput'), openBtn: document.getElementById('openBtn'), closeBtn: document.getElementById('closeBtn'),
+            setLimitBtn: document.getElementById('setLimitBtn'), resetVolumeBtn: document.getElementById('resetVolumeBtn'), flowCard: document.getElementById('flowCard'),
+            lockdownOverlayMessage: document.querySelector('.lockdown-message'), confirmationModal: document.getElementById('confirmationModal'),
+            modalTitle: document.getElementById('modalTitle'), modalBody: document.getElementById('modalBody'), modalConfirmBtn: document.getElementById('modalConfirmBtn'),
+            modalCancelBtn: document.getElementById('modalCancelBtn'),
         };
 
         // --- STATE & ANIMATION VARIABLES ---
-        let socket;
-        let reconnectInterval = 1000; // Start with 1 second for reconnection
-        let volumeChart = null;
-        let currentGaugeValue = 0;
-        let currentFlowRate = 0;
-        let currentTotalVolume = 0;
-        let deviceDataTimeout = null; // NEW: Timer for device data
-        const DEVICE_OFFLINE_THRESHOLD = 15000; // NEW: 15 seconds timeout
+        let socket, reconnectInterval = 1000, volumeChart = null, currentFlowRate = 0, currentTotalVolume = 0, deviceDataTimeout = null;
+        const DEVICE_OFFLINE_THRESHOLD = 15000;
+        let confirmAction = null;
 
         // --- WEBSOCKET CONNECTION LOGIC ---
         function connectWebSocket() {
@@ -180,48 +163,44 @@
         function setupSocketListeners() {
             socket.onopen = () => {
                 console.log('✅ WebSocket connection established.');
-                reconnectInterval = 1000; // Reset reconnect timer on success
-                unlockSystemSafety(); // Unlock UI, but wait for data
+                reconnectInterval = 1000;
                 showNotification('Connected to server! Waiting for device data...', 'info');
             };
 
             socket.onclose = () => {
                 console.warn('❌ WebSocket connection lost. Attempting to reconnect...');
-                lockSystemSafety(`🛡️ SERVER OFFLINE`, `Connection to the server was lost. Reconnecting...`);
-                clearTimeout(deviceDataTimeout); // Stop the device timeout timer
-                // Exponential backoff for reconnection
-                const timeout = Math.min(reconnectInterval, 30000); // Cap at 30 seconds
+                updateDeviceOnlineStatus(false, 'SERVER');
+                clearTimeout(deviceDataTimeout); 
+                const timeout = Math.min(reconnectInterval, 30000); 
                 setTimeout(connectWebSocket, timeout);
-                reconnectInterval *= 2; // Double the interval for the next attempt
+                reconnectInterval *= 2; 
             };
 
-            socket.onerror = (error) => {
-                console.error('WebSocket Error:', error);
-            };
+            socket.onerror = (error) => { console.error('WebSocket Error:', error); };
 
             socket.onmessage = (event) => {
-                // NEW: Reset the device offline timer every time we get data
+                // FIXED CORE LOGIC: Any message resets the timer and marks device as online.
                 clearTimeout(deviceDataTimeout);
+                updateDeviceOnlineStatus(true);
+                unlockSystemSafety();
 
-                const message = JSON.parse(event.data);
-                const { type, payload } = message;
-
-                if (type === 'initial-state' || type === 'data-update') {
-                    const isDeviceOnline = payload[VPIN.ONLINE_STATUS] && parseInt(payload[VPIN.ONLINE_STATUS]) === 1;
-                    updateDeviceOnlineStatus(isDeviceOnline);
-
-                    if (isDeviceOnline) {
-                        unlockSystemSafety(); // Ensure UI is unlocked if it was locked
+                try {
+                    const message = JSON.parse(event.data);
+                    const { type, payload } = message;
+                    if (type === 'initial-state' || type === 'data-update') {
                         updateUI(payload);
-
-                        // NEW: Set a timeout to detect if the device stops sending data
-                        deviceDataTimeout = setTimeout(() => {
-                            console.warn(`Device data timeout! No data received for ${DEVICE_OFFLINE_THRESHOLD / 1000}s.`);
-                            updateDeviceOnlineStatus(false);
-                            lockSystemSafety('🔌 DEVICE OFFLINE', 'The hardware has stopped sending data.');
-                        }, DEVICE_OFFLINE_THRESHOLD);
                     }
+                } catch (e) {
+                    console.error("Failed to parse incoming socket message:", event.data, e);
+                    return; // Stop processing this malformed message
                 }
+
+                // Set a new timeout. If no message arrives in the next 15 seconds,
+                // the device will be marked as offline.
+                deviceDataTimeout = setTimeout(() => {
+                    console.warn(`Device data timeout! No data received for ${DEVICE_OFFLINE_THRESHOLD / 1000}s.`);
+                    updateDeviceOnlineStatus(false, 'DEVICE');
+                }, DEVICE_OFFLINE_THRESHOLD);
             };
         }
 
@@ -231,12 +210,10 @@
             DOMElements.lockdownOverlayMessage.innerHTML = `${title}<small>${subtitle}</small>`;
         }
 
-        function unlockSystemSafety() {
-            document.body.classList.remove('safety-lockdown');
-        }
+        function unlockSystemSafety() { document.body.classList.remove('safety-lockdown'); }
 
-        function updateDeviceOnlineStatus(isOnline) {
-             if (isOnline) {
+        function updateDeviceOnlineStatus(isOnline, source = 'DEVICE') {
+            if (isOnline) {
                 DOMElements.deviceStatus.textContent = 'ONLINE';
                 DOMElements.deviceStatus.className = 'device-status-indicator online';
                 DOMElements.flowCard.className = 'card online-device';
@@ -247,46 +224,41 @@
                 DOMElements.flowRate.textContent = '--.--';
                 DOMElements.valveStatus.textContent = 'UNKNOWN';
                 DOMElements.valveStatus.className = 'status-value';
+                
+                // FIXED: Ensure control buttons are disabled when offline
+                DOMElements.openBtn.disabled = true;
+                DOMElements.closeBtn.disabled = true;
+
+                if (source === 'DEVICE') lockSystemSafety('🔌 DEVICE OFFLINE', 'The hardware has stopped sending data.');
+                else if (source === 'SERVER') lockSystemSafety('🛡️ SERVER OFFLINE', 'Connection to the server was lost. Reconnecting...');
             }
         }
         
         // --- UI UPDATE & ANIMATION LOGIC ---
         function animateValue(start, end, duration, updater) {
-            const range = end - start;
+            if (Math.abs(start - end) < 0.01) { updater(end); return; }
             let startTime = null;
-
+            const range = end - start;
             function animationStep(timestamp) {
                 if (!startTime) startTime = timestamp;
                 const progress = Math.min((timestamp - startTime) / duration, 1);
-                const currentValue = start + range * progress;
-                updater(currentValue);
-                if (progress < 1) {
-                    requestAnimationFrame(animationStep);
-                }
+                updater(start + range * progress);
+                if (progress < 1) requestAnimationFrame(animationStep);
             }
             requestAnimationFrame(animationStep);
         }
 
         function updateUI(data) {
-            // Animate Flow Rate
             if (data[VPIN.FLOW_RATE] !== undefined) {
                 const newFlowRate = parseFloat(data[VPIN.FLOW_RATE]);
-                animateValue(currentFlowRate, newFlowRate, 500, (val) => {
-                    DOMElements.flowRate.textContent = val.toFixed(2);
-                });
+                animateValue(currentFlowRate, newFlowRate, 500, (val) => { DOMElements.flowRate.textContent = val.toFixed(2); });
                 currentFlowRate = newFlowRate;
             }
-
-            // Animate Total Volume
             if (data[VPIN.TOTAL_VOLUME] !== undefined) {
                 const newTotalVolume = parseFloat(data[VPIN.TOTAL_VOLUME]);
-                 animateValue(currentTotalVolume, newTotalVolume, 500, (val) => {
-                    DOMElements.totalVolumeDisplay.textContent = `${val.toFixed(1)} L`;
-                });
+                animateValue(currentTotalVolume, newTotalVolume, 500, (val) => { DOMElements.totalVolumeDisplay.textContent = `${val.toFixed(1)} L`; });
                 currentTotalVolume = newTotalVolume;
             }
-            
-            // Update Valve Status (no animation needed)
             if (data[VPIN.VALVE_STATUS] !== undefined) {
                 const isOpen = parseInt(data[VPIN.VALVE_STATUS]) === 1;
                 DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
@@ -294,17 +266,12 @@
                 DOMElements.openBtn.disabled = isOpen;
                 DOMElements.closeBtn.disabled = !isOpen;
             }
-            
-            // Update Volume Limit and Gauge
             let volumeLimit = parseFloat(DOMElements.volumeLimitDisplay.textContent.split(' ')[0]) || 100;
             if (data[VPIN.VOLUME_LIMIT] !== undefined) {
                 volumeLimit = parseFloat(data[VPIN.VOLUME_LIMIT]);
                 DOMElements.volumeLimitDisplay.textContent = `${volumeLimit.toFixed(1)} L`;
-                if (document.activeElement !== DOMElements.volumeLimitInput) {
-                    DOMElements.volumeLimitInput.value = volumeLimit;
-                }
+                if (document.activeElement !== DOMElements.volumeLimitInput) DOMElements.volumeLimitInput.value = volumeLimit;
             }
-
             updateGauge(currentTotalVolume, volumeLimit);
         }
 
@@ -312,44 +279,24 @@
             const ctx = document.getElementById('volumeGauge').getContext('2d');
             volumeChart = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
-                    datasets: [{
-                        data: [0, 100], backgroundColor: ['#3498db', '#ecf0f1'],
-                        borderWidth: 0, borderRadius: 8,
-                        circumference: 270, rotation: -135
-                    }]
-                },
-                options: {
-                    cutout: '70%', plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                    maintainAspectRatio: false, animation: false // Disable default chart.js animation
-                }
+                data: { datasets: [{ data: [0, 100], backgroundColor: ['#3498db', '#ecf0f1'], borderWidth: 0, borderRadius: 8, circumference: 270, rotation: -135 }] },
+                options: { cutout: '70%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, maintainAspectRatio: false, animation: { duration: 800, easing: 'easeOutQuart' } }
             });
         }
 
-        function updateGauge(targetValue, max) {
+        function updateGauge(value, max) {
             if (!volumeChart || max <= 0) return;
-            const targetPercent = Math.min((targetValue / max) * 100, 100);
-
-            const animate = () => {
-                const diff = targetPercent - currentGaugeValue;
-                if (Math.abs(diff) < 0.1) {
-                    currentGaugeValue = targetPercent; // Snap to final value
-                } else {
-                    currentGaugeValue += diff * 0.1; // Animate 10% of the distance each frame
-                    requestAnimationFrame(animate); // Continue animation
-                }
-                volumeChart.data.datasets[0].data = [currentGaugeValue, 100 - currentGaugeValue];
-                volumeChart.update('none'); // Update without animation
-            }
-            animate();
+            const percent = Math.min((value / max) * 100, 100);
+            volumeChart.data.datasets[0].data[0] = percent;
+            volumeChart.data.datasets[0].data[1] = 100 - percent;
+            volumeChart.update();
         }
 
         // --- API COMMANDS & NOTIFICATIONS ---
         async function updateBlynkPinValue(pin, value) {
             try {
                 const response = await fetch('/api/update-pin', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ pin, value })
                 });
                 if (!response.ok) throw new Error(`API request failed: ${response.status}`);
@@ -375,31 +322,54 @@
             }, 3000);
         }
 
+        // --- NEW: Custom Confirmation Modal Logic ---
+        function showConfirmation(title, body, onConfirm) {
+            DOMElements.modalTitle.textContent = title;
+            DOMElements.modalBody.textContent = body;
+            confirmAction = onConfirm;
+            DOMElements.confirmationModal.classList.add('show');
+        }
+
+        function hideConfirmation() {
+            DOMElements.confirmationModal.classList.remove('show');
+            confirmAction = null;
+        }
+
         // --- EVENT LISTENERS ---
         function setupEventListeners() {
             DOMElements.openBtn.addEventListener('click', () => {
                 showNotification('Sending OPEN command...', 'info');
-                updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1);
+                updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1)
+                    .catch(() => showNotification('OPEN command failed.', 'error')); // FIXED: Error handling
             });
             DOMElements.closeBtn.addEventListener('click', () => {
                 showNotification('Sending CLOSE command...', 'info');
-                updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1);
+                updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1)
+                    .catch(() => showNotification('CLOSE command failed.', 'error')); // FIXED: Error handling
             });
             DOMElements.resetVolumeBtn.addEventListener('click', () => {
-                if (confirm('Are you sure you want to reset the total volume?')) {
+                // FIXED: Replaced window.confirm with custom modal
+                showConfirmation('Reset Volume?', 'Are you sure you want to reset the total volume? This cannot be undone.', () => {
                     showNotification('Resetting volume...', 'info');
                     updateBlynkPinValue(VPIN.CMD_RESET_VOLUME, 1);
-                }
+                });
             });
             DOMElements.setLimitBtn.addEventListener('click', () => {
                 const limit = parseFloat(DOMElements.volumeLimitInput.value);
-                if (isNaN(limit) || limit < 1) {
-                    showNotification('Please enter a valid limit.', 'error'); return;
-                }
+                if (isNaN(limit) || limit < 1) { showNotification('Please enter a valid limit.', 'error'); return; }
                 showNotification(`Setting limit to ${limit} L...`, 'info');
                 updateBlynkPinValue(VPIN.CMD_SET_LIMIT, limit)
                     .then(() => showNotification('Limit updated successfully!', 'success'))
                     .catch(err => showNotification('Failed to set limit', 'error'));
+            });
+
+            // NEW: Event listeners for the custom modal
+            DOMElements.modalCancelBtn.addEventListener('click', hideConfirmation);
+            DOMElements.modalConfirmBtn.addEventListener('click', () => {
+                if (typeof confirmAction === 'function') {
+                    confirmAction();
+                }
+                hideConfirmation();
             });
         }
 
@@ -408,9 +378,8 @@
             initializeGauge();
             setupEventListeners();
             lockSystemSafety('🛡️ CONNECTING...', 'Establishing secure connection to the server.');
-            connectWebSocket(); // Start the WebSocket connection
+            connectWebSocket();
         });
     </script>
 </body>
 </html>
-

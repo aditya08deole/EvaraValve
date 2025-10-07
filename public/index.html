@@ -166,6 +166,8 @@
         let currentGaugeValue = 0;
         let currentFlowRate = 0;
         let currentTotalVolume = 0;
+        let deviceDataTimeout = null; // NEW: Timer for device data
+        const DEVICE_OFFLINE_THRESHOLD = 45000; // NEW: 45 seconds timeout
 
         // --- WEBSOCKET CONNECTION LOGIC ---
         function connectWebSocket() {
@@ -179,13 +181,14 @@
             socket.onopen = () => {
                 console.log('✅ WebSocket connection established.');
                 reconnectInterval = 1000; // Reset reconnect timer on success
-                unlockSystemSafety();
-                showNotification('Connected to server!', 'success');
+                unlockSystemSafety(); // Unlock UI, but wait for data
+                showNotification('Connected to server! Waiting for device data...', 'info');
             };
 
             socket.onclose = () => {
                 console.warn('❌ WebSocket connection lost. Attempting to reconnect...');
-                lockSystemSafety(`🛡️ RECONNECTING...`, `Connection to the server was lost.`);
+                lockSystemSafety(`🛡️ SERVER OFFLINE`, `Connection to the server was lost. Reconnecting...`);
+                clearTimeout(deviceDataTimeout); // Stop the device timeout timer
                 // Exponential backoff for reconnection
                 const timeout = Math.min(reconnectInterval, 30000); // Cap at 30 seconds
                 setTimeout(connectWebSocket, timeout);
@@ -194,18 +197,29 @@
 
             socket.onerror = (error) => {
                 console.error('WebSocket Error:', error);
-                // The onclose event will fire next, triggering the reconnect logic.
             };
 
             socket.onmessage = (event) => {
+                // NEW: Reset the device offline timer every time we get data
+                clearTimeout(deviceDataTimeout);
+
                 const message = JSON.parse(event.data);
                 const { type, payload } = message;
 
                 if (type === 'initial-state' || type === 'data-update') {
                     const isDeviceOnline = payload[VPIN.ONLINE_STATUS] && parseInt(payload[VPIN.ONLINE_STATUS]) === 1;
                     updateDeviceOnlineStatus(isDeviceOnline);
+
                     if (isDeviceOnline) {
+                        unlockSystemSafety(); // Ensure UI is unlocked if it was locked
                         updateUI(payload);
+
+                        // NEW: Set a timeout to detect if the device stops sending data
+                        deviceDataTimeout = setTimeout(() => {
+                            console.warn(`Device data timeout! No data received for ${DEVICE_OFFLINE_THRESHOLD / 1000}s.`);
+                            updateDeviceOnlineStatus(false);
+                            lockSystemSafety('🔌 DEVICE OFFLINE', 'The hardware has stopped sending data.');
+                        }, DEVICE_OFFLINE_THRESHOLD);
                     }
                 }
             };
@@ -230,8 +244,6 @@
                 DOMElements.deviceStatus.textContent = 'OFFLINE';
                 DOMElements.deviceStatus.className = 'device-status-indicator offline';
                 DOMElements.flowCard.className = 'card offline-device';
-                // When device is offline, we show placeholders but don't lock the UI
-                // The main server connection lock is handled by socket.onclose
                 DOMElements.flowRate.textContent = '--.--';
                 DOMElements.valveStatus.textContent = 'UNKNOWN';
                 DOMElements.valveStatus.className = 'status-value';
@@ -401,3 +413,4 @@
     </script>
 </body>
 </html>
+

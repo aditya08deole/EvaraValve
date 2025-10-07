@@ -36,10 +36,8 @@ const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v3', 'v4', 'v5'];
 
 // --- STATE MANAGEMENT & CACHE ---
 let deviceDataCache = {}; // In-memory cache for device pin data
-// --- START: NEW VARIABLES for server.js ---
 let lastUptimeValue = -1; // Tracks the device heartbeat counter from V5
 let lastDataReceivedTimestamp = Date.now(); // Tracks the time of the last valid data packet
-// --- END: NEW VARIABLES ---
 
 // --- VALIDATION ---
 if (!BLYNK_AUTH_TOKEN) {
@@ -56,7 +54,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- CORE LOGIC: BLYNK DATA POLLING ---
 
-// --- START: REPLACEMENT CODE for pollBlynkData function in server.js ---
 const pollBlynkData = async () => {
     const pinParams = VIRTUAL_PINS_TO_POLL.join('&');
     const url = `${BLYNK_API_BASE}/get?token=${BLYNK_AUTH_TOKEN}&${pinParams}`;
@@ -70,11 +67,13 @@ const pollBlynkData = async () => {
         const newData = await blynkResponse.json();
         const currentUptime = newData.v5; // V5 is our uptime pin from the ESP32
 
-        // --- NEW HEARTBEAT LOGIC ---
+        // --- HEARTBEAT LOGIC ---
         // Check if the uptime value has changed. If it's the same as the last time we checked...
         if (currentUptime !== undefined && lastUptimeValue === currentUptime) {
-            // ...and if more than 5 seconds have passed since we last saw a change...
-            if (Date.now() - lastDataReceivedTimestamp > 5000) {
+            // --- MODIFIED LINE ---
+            // ...and if more than 15 seconds have passed (must be > ESP32's 10s heartbeat)...
+            if (Date.now() - lastDataReceivedTimestamp > 15000) {
+            // --- END OF MODIFICATION ---
                 // ...then we assume the ESP32 is offline and sending stale data.
                 console.warn('Stale data detected (uptime not changing). Halting broadcast.');
                 // We stop here and DO NOT broadcast, which will cause the frontend's timer to expire.
@@ -95,12 +94,8 @@ const pollBlynkData = async () => {
         console.error('Polling Error: Failed to fetch from Blynk API:', error.message);
     }
 };
-// --- END: REPLACEMENT CODE ---
 
 // --- API ENDPOINTS ---
-
-// This endpoint is for state-changing commands from the client (e.g., turning on a valve).
-// Data retrieval is now handled by the WebSocket push mechanism.
 app.post('/api/update-pin', async (req, res) => {
     const { pin, value } = req.body;
     if (!pin || value === undefined) {
@@ -116,7 +111,6 @@ app.post('/api/update-pin', async (req, res) => {
         }
         
         // After a successful update, trigger an immediate poll to get the latest state faster.
-        // This makes the UI feel more responsive.
         pollBlynkData();
 
         res.status(200).json({ success: true, message: `Pin ${pin} updated.` });
@@ -129,37 +123,27 @@ app.post('/api/update-pin', async (req, res) => {
 
 
 // --- SERVER BOILERPLATE ---
-
-// Health check endpoint for Render
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'healthy' });
 });
 
-// Serve the main dashboard page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 
 // --- SERVER INITIALIZATION ---
-
-// Start the Express server and attach the WebSocket server to it.
 const server = app.listen(PORT, () => {
     console.log(`🚀 EvaraTap Server is running on port ${PORT}`);
     console.log(`🔗 Environment: ${process.env.NODE_ENV || 'development'}`);
     
-    // Start polling Blynk for data immediately after the server starts.
     setInterval(pollBlynkData, POLLING_RATE_MS);
 });
 
 
 // --- WEBSOCKET SERVER LOGIC ---
-
 const wss = new WebSocketServer({ server });
 
-/**
- * Broadcasts the latest cached data to all connected WebSocket clients.
- */
 function broadcastDataUpdate() {
     const message = JSON.stringify({
         type: 'data-update',
@@ -167,31 +151,25 @@ function broadcastDataUpdate() {
     });
 
     wss.clients.forEach(client => {
-        // Check if the client connection is still open before sending.
         if (client.readyState === WebSocket.OPEN) {
             client.send(message);
         }
     });
 }
 
-// Handle new client connections
 wss.on('connection', (ws) => {
     console.log('✅ Client connected to WebSocket.');
 
-    // Immediately send the current cached state to the new client.
-    // This ensures the dashboard loads with data instantly.
     const initialStateMessage = JSON.stringify({
         type: 'initial-state',
         payload: deviceDataCache
     });
     ws.send(initialStateMessage);
 
-    // Handle client disconnection
     ws.on('close', () => {
         console.log('❌ Client disconnected.');
     });
 
-    // Handle potential errors on a client connection
     ws.on('error', (error) => {
         console.error('WebSocket client error:', error);
     });

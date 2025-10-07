@@ -8,7 +8,9 @@
  * Architecture:
  * 1. Caching: A server-side cache (`deviceDataCache`) holds the latest device state.
  * 2. Polling: The server polls the Blynk API at a regular interval (`POLLING_RATE_MS`).
- * 3. Data Diffing: An update is only broadcast if the new data differs from the cached data.
+ * 3. Heartbeat Logic: The server checks the ESP32's uptime counter (V5). If the counter
+ * stops incrementing, the server halts data broadcasts, allowing the frontend to
+ * correctly identify an offline device.
  * 4. WebSocket Broadcasting: When data changes, it's pushed to all connected clients.
  * 5. HTTP for Commands: State-changing actions (e.g., opening a valve) are handled
  * via a standard, reliable HTTP POST endpoint.
@@ -34,6 +36,10 @@ const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v3', 'v4', 'v5'];
 
 // --- STATE MANAGEMENT & CACHE ---
 let deviceDataCache = {}; // In-memory cache for device pin data
+// --- START: NEW VARIABLES for server.js ---
+let lastUptimeValue = -1; // Tracks the device heartbeat counter from V5
+let lastDataReceivedTimestamp = Date.now(); // Tracks the time of the last valid data packet
+// --- END: NEW VARIABLES ---
 
 // --- VALIDATION ---
 if (!BLYNK_AUTH_TOKEN) {
@@ -50,10 +56,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- CORE LOGIC: BLYNK DATA POLLING ---
 
-/**
- * Fetches the latest data from all monitored Blynk pins.
- * Compares it to the cache and broadcasts an update if changes are detected.
- */
+// --- START: REPLACEMENT CODE for pollBlynkData function in server.js ---
 const pollBlynkData = async () => {
     const pinParams = VIRTUAL_PINS_TO_POLL.join('&');
     const url = `${BLYNK_API_BASE}/get?token=${BLYNK_AUTH_TOKEN}&${pinParams}`;
@@ -65,18 +68,34 @@ const pollBlynkData = async () => {
         }
         
         const newData = await blynkResponse.json();
+        const currentUptime = newData.v5; // V5 is our uptime pin from the ESP32
 
-        // Data Diffing: Only broadcast an update if the data has actually changed.
-        if (JSON.stringify(newData) !== JSON.stringify(deviceDataCache)) {
-            console.log('🔄 Data changed. Updating cache and broadcasting...');
-            deviceDataCache = newData;
-            broadcastDataUpdate();
+        // --- NEW HEARTBEAT LOGIC ---
+        // Check if the uptime value has changed. If it's the same as the last time we checked...
+        if (currentUptime !== undefined && lastUptimeValue === currentUptime) {
+            // ...and if more than 5 seconds have passed since we last saw a change...
+            if (Date.now() - lastDataReceivedTimestamp > 5000) {
+                // ...then we assume the ESP32 is offline and sending stale data.
+                console.warn('Stale data detected (uptime not changing). Halting broadcast.');
+                // We stop here and DO NOT broadcast, which will cause the frontend's timer to expire.
+                return; 
+            }
+        } else {
+            // If we get here, the uptime value has changed, so the data is fresh.
+            // We update our trackers with the new uptime and the current time.
+            lastUptimeValue = currentUptime;
+            lastDataReceivedTimestamp = Date.now();
         }
+
+        // If data is fresh, update the cache and broadcast to all connected clients.
+        deviceDataCache = newData;
+        broadcastDataUpdate();
+
     } catch (error) {
         console.error('Polling Error: Failed to fetch from Blynk API:', error.message);
-        // Don't crash the server, just log the error and try again on the next interval.
     }
 };
+// --- END: REPLACEMENT CODE ---
 
 // --- API ENDPOINTS ---
 

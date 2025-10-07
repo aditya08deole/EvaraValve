@@ -1,10 +1,15 @@
 /********************************************************************************
- * EvaraTap ESP32 Flow Control System - v4.4 (Final Pinout)
+ * EvaraTap ESP32 Flow Control System - v4.5 (Refactored)
  *
- * CHANGE LOG (from v4.3):
- * - FINALIZED: Updated RELAY_OPEN_PIN and RELAY_CLOSE_PIN definitions to match
- * the user-confirmed physical wiring (OPEN=26, CLOSE=25). This resolves all
- * known hardware control and state mismatch bugs.
+ * CHANGE LOG (from v4.4):
+ * - CONSOLIDATED PUBLISHING: Replaced publishFlowData() and publishStatusData()
+ * with a single publishAllData() function. This ensures all dashboard widgets
+ * update simultaneously every second for a synchronized user experience.
+ * - UPTIME HEARTBEAT: Implemented a true uptime counter on Virtual Pin V5.
+ * This value increments every second, allowing the server to reliably
+ * detect if the device is genuinely offline vs. just idle.
+ * - CLEANUP: Removed the redundant STATUS_PUBLISH_INTERVAL constant and updated
+ * the timer and BLYNK_CONNECTED() function to use the new architecture.
  ********************************************************************************/
 
 #define BLYNK_TEMPLATE_ID "XXXXX"
@@ -40,7 +45,7 @@ const float PULSES_PER_LITER = 367.9;
 
 const unsigned long SENSOR_PROCESS_INTERVAL = 200;
 const unsigned long DATA_PUBLISH_INTERVAL = 1000;
-const unsigned long STATUS_PUBLISH_INTERVAL = 10000;
+// const unsigned long STATUS_PUBLISH_INTERVAL = 10000; // DELETED as it's no longer needed
 const unsigned long WIFI_RECONNECT_INTERVAL = 10000;
 const unsigned long BLYNK_RECONNECT_INTERVAL = 5000;
 const unsigned long VALVE_RELAY_PULSE_DURATION = 500;
@@ -82,13 +87,15 @@ unsigned long lastEepromSaveTime = 0;
 float lastSavedVolumeLiters = 0.0;
 bool interruptAttached = false;
 
+// Add this line with your other global variables
+uint32_t deviceUptimeSeconds = 0;
+
 // Function forward declarations for clarity
 void IRAM_ATTR pulseCounter();
 void saveSettings();
 void loadSettings();
 void processSensorData();
-void publishFlowData();
-void publishStatusData();
+void publishAllData(); // New consolidated function
 void handleWifiConnection();
 void handleBlynkConnection();
 void handleOperationalState();
@@ -100,7 +107,7 @@ void saveSettingsIfNeeded();
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("\nEvaraTap Flow Control System v4.4 (Final Pinout)");
+  Serial.println("\nEvaraTap Flow Control System v4.5 (Refactored)");
 
   pinMode(RELAY_OPEN_PIN, OUTPUT);
   pinMode(RELAY_CLOSE_PIN, OUTPUT);
@@ -124,9 +131,10 @@ void setup() {
 
   Blynk.config(BLYNK_AUTH_TOKEN);
   
+  // --- START: REPLACEMENT CODE for setup() timers ---
   timer.setInterval(SENSOR_PROCESS_INTERVAL, processSensorData);
-  timer.setInterval(DATA_PUBLISH_INTERVAL, publishFlowData);
-  timer.setInterval(STATUS_PUBLISH_INTERVAL, publishStatusData);
+  timer.setInterval(DATA_PUBLISH_INTERVAL, publishAllData); // This now calls the new unified function
+  // --- END: REPLACEMENT CODE ---
   
   currentState = CONNECTING_WIFI;
   Serial.println("Initialization complete. Awaiting connections...");
@@ -238,24 +246,38 @@ void processSensorData() {
   saveSettingsIfNeeded();
 }
 
-void publishFlowData() {
+// --- START: REPLACEMENT CODE for publishing functions ---
+// This new function replaces both publishFlowData() and publishStatusData()
+void publishAllData() {
+  // Increment uptime every time we publish (which is every second)
+  deviceUptimeSeconds++;
+
+  // Send the high-frequency flow and volume data
   Blynk.virtualWrite(VPIN_TOTAL_VOLUME, totalVolumeLiters);
   Blynk.virtualWrite(VPIN_FLOW_RATE, flowSmoothedLPM);
-  Serial.printf("Published Flow: %.2f L, %.2f LPM\n", totalVolumeLiters, flowSmoothedLPM);
-}
 
-void publishStatusData() {
+  // Also send the critical status data in the same packet
   Blynk.virtualWrite(VPIN_VALVE_STATUS, valveOpen ? 1 : 0);
-  Blynk.virtualWrite(VPIN_RESET_COUNT, settings.deviceResetCount);
   Blynk.virtualWrite(VPIN_VOLUME_LIMIT, settings.volumeLimitLiters);
-  Blynk.virtualWrite(VPIN_ONLINE_STATUS, 1);
-  Serial.println("Published Status Heartbeat");
-}
+  Blynk.virtualWrite(VPIN_RESET_COUNT, settings.deviceResetCount);
 
+  // Send the new uptime counter on V5 as a true heartbeat
+  Blynk.virtualWrite(VPIN_ONLINE_STATUS, deviceUptimeSeconds);
+
+  // Update the serial monitor with a comprehensive log message
+  Serial.printf("Published Data Packet: %.2f L, %.2f LPM, Uptime: %u s, Valve: %s\n",
+    totalVolumeLiters, flowSmoothedLPM, deviceUptimeSeconds, valveOpen ? "OPEN" : "CLOSED");
+}
+// --- END: REPLACEMENT CODE ---
+
+
+// --- START: REPLACEMENT CODE for BLYNK_CONNECTED() ---
 BLYNK_CONNECTED() {
   Serial.println("Blynk Connected! Syncing state...");
   Blynk.syncAll();
-  publishStatusData();
+  
+  // Sync all data immediately using the new consolidated function
+  publishAllData();
   
   if (currentState != OPERATIONAL) {
     currentState = OPERATIONAL;
@@ -267,6 +289,7 @@ BLYNK_CONNECTED() {
     Serial.println("Flow sensor interrupt attached.");
   }
 }
+// --- END: REPLACEMENT CODE ---
 
 BLYNK_WRITE(VPIN_CMD_OPEN_VALVE) { if (param.asInt() == 1) { openValve(); } }
 BLYNK_WRITE(VPIN_CMD_CLOSE_VALVE) { if (param.asInt() == 1) { closeValve(); } }
@@ -388,4 +411,3 @@ void updateStatusLED() {
     lastBlink = millis();
   }
 }
-

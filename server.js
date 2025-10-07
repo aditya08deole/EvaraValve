@@ -24,7 +24,7 @@ const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- Smart Polling Configuration ---
 const POLLING_RATE_ACTIVE_MS = 5000;      // Poll every 5 seconds when device is ONLINE
-const POLLING_RATE_IDLE_MS = 60000;       // Poll every 60 seconds when device is OFFLINE
+const POLLING_RATE_IDLE_MS = 15*60000;       // Poll every 15*60 seconds when device is OFFLINE
 const STALE_DATA_THRESHOLD_MS = 15000;    // Consider data stale after 15 seconds of no uptime change
 
 // Define all virtual pins your dashboard needs to monitor

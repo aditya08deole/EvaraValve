@@ -1,5 +1,5 @@
 /**
- * EvaraTap Secure Backend for Blynk on Render
+ * EvaraTap Secure Backend for Blynk on Render - v2.0 with Smart Polling
  *
  * This server acts as a secure, real-time proxy between the public dashboard
  * and the Blynk API. It uses a WebSocket connection to push data updates
@@ -7,20 +7,20 @@
  *
  * Architecture:
  * 1. Caching: A server-side cache (`deviceDataCache`) holds the latest device state.
- * 2. Polling: The server polls the Blynk API at a regular interval (`POLLING_RATE_MS`).
- * 3. Heartbeat Logic: The server checks the ESP32's uptime counter (V5). If the counter
- * stops incrementing, the server halts data broadcasts, allowing the frontend to
- * correctly identify an offline device.
+ * 2. Smart Polling: The server now uses a dynamic polling rate. It polls quickly
+ * when the ESP32 is online (Active Mode) and very slowly when it detects the
+ * device is offline (Idle Mode) to conserve API message limits.
+ * 3. Heartbeat Logic: The server checks the ESP32's uptime counter (V5) to
+ * determine if the device is online or offline.
  * 4. WebSocket Broadcasting: When data changes, it's pushed to all connected clients.
- * 5. HTTP for Commands: State-changing actions (e.g., opening a valve) are handled
- * via a standard, reliable HTTP POST endpoint.
+ * 5. HTTP for Commands: State-changing actions are handled via a standard HTTP POST endpoint.
  */
 
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fetch from 'node-fetch';
-import { WebSocketServer, WebSocket } from 'ws'; // Import WebSocket classes
+import { WebSocketServer, WebSocket } from 'ws';
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -29,122 +29,124 @@ const PORT = process.env.PORT || 10000;
 const BLYNK_AUTH_TOKEN = process.env.BLYNK_AUTH_TOKEN;
 const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
-// --- APPLICATION CONSTANTS ---
-const POLLING_RATE_MS = 1000; // Poll Blynk every 1 second
+// --- MODIFIED: Smart Polling Rate Configuration ---
+const POLLING_RATE_ACTIVE_MS = 5000;   // Poll every 5 seconds when device is ONLINE
+const POLLING_RATE_IDLE_MS = 60000;    // Poll every 60 seconds when device is OFFLINE
+const STALE_DATA_THRESHOLD_MS = 15000; // Consider data stale after 15 seconds of no uptime change
+
 // Define all virtual pins your dashboard needs to monitor here.
 const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v3', 'v4', 'v5'];
 
 // --- STATE MANAGEMENT & CACHE ---
-let deviceDataCache = {}; // In-memory cache for device pin data
-let lastUptimeValue = -1; // Tracks the device heartbeat counter from V5
-let lastDataReceivedTimestamp = Date.now(); // Tracks the time of the last valid data packet
+let deviceDataCache = {};
+let lastUptimeValue = -1;
+let lastDataReceivedTimestamp = Date.now();
+// --- NEW: State variable to track device status ---
+let isDeviceOnline = true;
 
 // --- VALIDATION ---
 if (!BLYNK_AUTH_TOKEN) {
     console.error('❌ CRITICAL ERROR: BLYNK_AUTH_TOKEN is not set in the environment variables.');
-    process.exit(1); // Stop the server if the token is missing
+    process.exit(1);
 }
 
 // --- EXPRESS CONFIGURATION ---
 app.use(express.json());
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- CORE LOGIC: BLYNK DATA POLLING ---
-
+// --- CORE LOGIC: BLYNK DATA POLLING (MODIFIED FOR SMART POLLING) ---
 const pollBlynkData = async () => {
-    const pinParams = VIRTUAL_PINS_TO_POLL.join('&');
-    const url = `${BLYNK_API_BASE}/get?token=${BLYNK_AUTH_TOKEN}&${pinParams}`;
-
     try {
+        const pinParams = VIRTUAL_PINS_TO_POLL.join('&');
+        const url = `${BLYNK_API_BASE}/get?token=${BLYNK_AUTH_TOKEN}&${pinParams}`;
+        
         const blynkResponse = await fetch(url);
         if (!blynkResponse.ok) {
             throw new Error(`Blynk API responded with status: ${blynkResponse.status}`);
         }
         
         const newData = await blynkResponse.json();
-        const currentUptime = newData.v5; // V5 is our uptime pin from the ESP32
+        const currentUptime = newData.v5;
 
-        // --- HEARTBEAT LOGIC ---
-        // Check if the uptime value has changed. If it's the same as the last time we checked...
+        // --- MODIFIED HEARTBEAT LOGIC ---
         if (currentUptime !== undefined && lastUptimeValue === currentUptime) {
-            // --- MODIFIED LINE ---
-            // ...and if more than 15 seconds have passed (must be > ESP32's 10s heartbeat)...
-            if (Date.now() - lastDataReceivedTimestamp > 15000) {
-            // --- END OF MODIFICATION ---
-                // ...then we assume the ESP32 is offline and sending stale data.
-                console.warn('Stale data detected (uptime not changing). Halting broadcast.');
-                // We stop here and DO NOT broadcast, which will cause the frontend's timer to expire.
-                return; 
+            // Uptime has not changed. Check if the stale threshold has been passed.
+            if (Date.now() - lastDataReceivedTimestamp > STALE_DATA_THRESHOLD_MS) {
+                if (isDeviceOnline) {
+                    console.warn('Stale data detected. ESP32 appears to be OFFLINE.');
+                    console.log('Switching to Idle Mode (polling every 60 seconds).');
+                    isDeviceOnline = false;
+                }
+                // We DO NOT broadcast stale data to clients.
+            } else {
+                 // Uptime is the same, but we are still within the grace period.
+                 // Broadcast the data as it might be a temporary network lag.
+                 broadcastDataUpdate(newData);
             }
         } else {
-            // If we get here, the uptime value has changed, so the data is fresh.
-            // We update our trackers with the new uptime and the current time.
+            // Uptime has changed, or this is the first poll. Data is fresh.
+            if (!isDeviceOnline) {
+                console.info('Fresh data detected! ESP32 is back ONLINE.');
+                console.log('Switching to Active Mode (polling every 5 seconds).');
+            }
+            isDeviceOnline = true;
             lastUptimeValue = currentUptime;
             lastDataReceivedTimestamp = Date.now();
+            broadcastDataUpdate(newData);
         }
-
-        // If data is fresh, update the cache and broadcast to all connected clients.
-        deviceDataCache = newData;
-        broadcastDataUpdate();
-
     } catch (error) {
         console.error('Polling Error: Failed to fetch from Blynk API:', error.message);
+        // If the API itself fails, we assume the device is offline to be safe.
+        isDeviceOnline = false;
+    } finally {
+        // --- NEW: Self-adjusting timer loop ---
+        // Schedule the next poll based on the current device status.
+        const nextPollDelay = isDeviceOnline ? POLLING_RATE_ACTIVE_MS : POLLING_RATE_IDLE_MS;
+        setTimeout(pollBlynkData, nextPollDelay);
     }
 };
 
 // --- API ENDPOINTS ---
 app.post('/api/update-pin', async (req, res) => {
+    // This function remains unchanged
     const { pin, value } = req.body;
     if (!pin || value === undefined) {
         return res.status(400).json({ error: 'Pin and value are required.' });
     }
-
     try {
         const url = `${BLYNK_API_BASE}/update?token=${BLYNK_AUTH_TOKEN}&${pin}=${value}`;
         const blynkResponse = await fetch(url);
-        
         if (!blynkResponse.ok) {
             throw new Error(`Blynk API responded with status: ${blynkResponse.status}`);
         }
-        
-        // After a successful update, trigger an immediate poll to get the latest state faster.
-        pollBlynkData();
-
         res.status(200).json({ success: true, message: `Pin ${pin} updated.` });
-
     } catch (error) {
         console.error('Error updating Blynk pin:', error.message);
         res.status(500).json({ error: 'Failed to update pin.' });
     }
 });
 
-
 // --- SERVER BOILERPLATE ---
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'healthy' });
-});
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
+app.get('/health', (req, res) => res.status(200).json({ status: 'healthy' }));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // --- SERVER INITIALIZATION ---
 const server = app.listen(PORT, () => {
     console.log(`🚀 EvaraTap Server is running on port ${PORT}`);
     console.log(`🔗 Environment: ${process.env.NODE_ENV || 'development'}`);
     
-    setInterval(pollBlynkData, POLLING_RATE_MS);
+    // --- MODIFIED: Start the smart polling loop once ---
+    pollBlynkData();
 });
-
 
 // --- WEBSOCKET SERVER LOGIC ---
 const wss = new WebSocketServer({ server });
 
-function broadcastDataUpdate() {
+function broadcastDataUpdate(data) {
+    // --- MODIFIED: Update cache before broadcasting ---
+    deviceDataCache = data;
     const message = JSON.stringify({
         type: 'data-update',
         payload: deviceDataCache
@@ -159,18 +161,11 @@ function broadcastDataUpdate() {
 
 wss.on('connection', (ws) => {
     console.log('✅ Client connected to WebSocket.');
-
     const initialStateMessage = JSON.stringify({
         type: 'initial-state',
         payload: deviceDataCache
     });
     ws.send(initialStateMessage);
-
-    ws.on('close', () => {
-        console.log('❌ Client disconnected.');
-    });
-
-    ws.on('error', (error) => {
-        console.error('WebSocket client error:', error);
-    });
+    ws.on('close', () => console.log('❌ Client disconnected.'));
+    ws.on('error', (error) => console.error('WebSocket client error:', error));
 });

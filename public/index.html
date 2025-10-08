@@ -32,13 +32,17 @@
         .notification.info { background: var(--primary-color); }
         .status-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; margin-bottom: 10px; background: var(--light-bg); border-radius: 8px; font-size: 14px; border: 1px solid var(--border-color); }
         .status-label { font-weight: 500; color: var(--secondary-color); }
-        .status-value { font-weight: 700; color: var(--text-color); }
+        .status-value { font-weight: 700; }
         .status-value.open { color: var(--success-color); }
         .status-value.closed { color: var(--danger-color); }
-        .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; font-size: 1.5rem; font-weight: bold; flex-direction: column; transition: opacity 0.3s ease; opacity: 0; pointer-events: none; }
+        .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.7); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; flex-direction: column; transition: opacity 0.3s ease; opacity: 0; pointer-events: none; }
         body.safety-lockdown .safety-lockdown-overlay { opacity: 1; pointer-events: auto; }
+        .lockdown-message { font-size: 1.5rem; font-weight: bold; }
         .lockdown-message small { font-size: 1rem; font-weight: 400; color: #bdc3c7; margin-top: 10px; display: block; }
-        body.safety-lockdown .btn, body.safety-lockdown .limit-set-btn { cursor: not-allowed; filter: grayscale(80%); pointer-events: none; }
+        body.safety-lockdown .btn, body.safety-lockdown .limit-set-btn { cursor: not-allowed; filter: grayscale(80%); }
+        .reconnect-btn { margin-top: 25px; padding: 12px 24px; background: var(--primary-color); color: white; border: none; border-radius: 50px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background-color 0.3s, transform 0.2s; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .reconnect-btn:hover:not(:disabled) { background: #2980b9; transform: translateY(-2px); }
+        .reconnect-btn:disabled { background: #7f8c8d; cursor: not-allowed; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .btn { padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .btn-open { background: linear-gradient(to right, #2ecc71, #27ae60); color: white; }
@@ -48,31 +52,14 @@
         .flow-display { position: relative; text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; margin-bottom: 20px; }
         .flow-value { font-size: 3rem; font-weight: bold; margin-bottom: 5px; transition: opacity 0.4s ease; }
         .flow-unit { font-size: 1.2rem; opacity: 0.9; }
-
-        /* --- NEW: Style for stale data indicator --- */
-        .flow-display.stale-data .flow-value,
-        .gauge-text.stale-data .gauge-value {
-            opacity: 0.6;
-        }
-        .flow-display.stale-data::after {
-            content: 'Last Reading';
-            position: absolute;
-            bottom: 8px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.7rem;
-            font-weight: 600;
-            background: rgba(0,0,0,0.3);
-            padding: 2px 8px;
-            border-radius: 10px;
-            color: #fff;
-        }
-
+        .flow-display.stale-data .flow-value { opacity: 0.6; }
+        .flow-display.stale-data::after { content: 'Last Reading'; position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; font-weight: 600; background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 10px; color: #fff; }
         .gauge-wrapper { position: relative; width: 100%; margin: 0 auto 20px; }
         .gauge-container { position: relative; width: 100%; height: 180px; margin: 0 auto; }
         .gauge-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         .gauge-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
         .gauge-value { font-size: 2.5rem; font-weight: bold; color: var(--secondary-color); margin-bottom: 5px; transition: opacity 0.4s ease; }
+        .gauge-value.stale-data { opacity: 0.6; }
         .gauge-label { font-size: 1.2rem; color: #7f8c8d; }
         .limit-config-panel { margin-top: 20px; background: var(--light-bg); border-radius: 12px; padding: 20px; border: 1px solid var(--border-color); }
         .config-header { font-size: 1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 15px; }
@@ -83,6 +70,8 @@
         .limit-set-btn:hover:not(:disabled) { background: #2980b9; }
         .reset-buttons { display: flex; gap: 10px; margin-top: 15px; justify-content: center; }
         .btn-small-reset { padding: 8px 16px; font-size: 0.8rem; background: linear-gradient(to right, #3498db, #2980b9); color: white; border: none; border-radius: 50px; cursor: pointer; }
+        
+        /* --- MODAL STYLES --- */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1001; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
         .modal-content { background: white; padding: 30px; border-radius: 15px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transform: scale(0.9); transition: transform 0.3s ease; }
@@ -98,12 +87,15 @@
 <body>
     
     <div class="safety-lockdown-overlay">
-        <div class="lockdown-message">
-            🛡️ CONNECTING...
-            <small>Establishing secure connection to the server.</small>
+        <div>
+            <div class="lockdown-message" id="lockdownMessage">
+                🛡️ CONNECTING...
+                <small>Establishing secure connection to the server.</small>
+            </div>
+            <button class="reconnect-btn" id="forceReconnectBtn">Try Reconnecting Now</button>
         </div>
     </div>
-    
+
     <div class="modal-overlay" id="confirmationModal">
         <div class="modal-content">
             <h3 class="modal-title" id="modalTitle">Are you sure?</h3>
@@ -114,15 +106,14 @@
             </div>
         </div>
     </div>
-
+    
     <div class="container">
         <header>
             <h1>🌊 EvaraTap Smart Flow Control</h1>
             <p>High-Performance IoT Water Management</p>
         </header>
-        
         <div class="dashboard">
-            <div class="card" id="flowCard">
+             <div class="card" id="flowCard">
                 <div class="device-status-indicator" id="deviceStatus">CONNECTING</div>
                 <h2 class="card-title">💧 Flow Control</h2>
                 <div class="flow-display" id="flowDisplay"><div class="flow-value" id="flowRate">--.--</div><div class="flow-unit">L/min</div></div>
@@ -130,13 +121,12 @@
                 <div class="status-item"><span class="status-label">System Uptime</span><span class="status-value" id="uptimeDisplay">--:--:--</span></div>
                 <div class="controls"><button class="btn btn-open" id="openBtn">OPEN VALVE</button><button class="btn btn-close" id="closeBtn">CLOSE VALVE</button></div>
             </div>
-            
             <div class="card">
                 <h2 class="card-title">📊 Volume Analytics</h2>
                 <div class="gauge-wrapper">
                     <div class="gauge-container">
                         <canvas id="volumeGauge" class="gauge-canvas"></canvas>
-                        <div class="gauge-text" id="gaugeText"><div class="gauge-value" id="totalVolumeDisplay">--.- L</div><div class="gauge-label">Total Volume</div></div>
+                        <div class="gauge-text"><div class="gauge-value" id="totalVolumeDisplay">--.- L</div><div class="gauge-label">Total Volume</div></div>
                     </div>
                 </div>
                 <div class="status-item"><span class="status-label">Volume Limit</span><span class="status-value" id="volumeLimitDisplay">--.-- L</span></div>
@@ -144,7 +134,7 @@
                     <div class="config-header">Set Auto-Shutoff Limit</div>
                     <div class="input-group"><input type="number" class="limit-input" id="volumeLimitInput" placeholder="e.g., 100" min="1" max="9999"><button class="limit-set-btn" id="setLimitBtn">SET</button></div>
                 </div>
-                <div class="reset-buttons"><button class="btn btn-small-reset" id="resetVolumeBtn">RESET TOTAL VOLUME</button></div>
+                <div class="reset-buttons"><button class="btn-small-reset" id="resetVolumeBtn">RESET TOTAL VOLUME</button></div>
             </div>
         </div>
     </div>
@@ -164,59 +154,46 @@
             setLimitBtn: document.getElementById('setLimitBtn'), 
             resetVolumeBtn: document.getElementById('resetVolumeBtn'), 
             flowCard: document.getElementById('flowCard'),
-            lockdownOverlayMessage: document.querySelector('.lockdown-message'), 
-            confirmationModal: document.getElementById('confirmationModal'),
-            modalTitle: document.getElementById('modalTitle'), 
-            modalBody: document.getElementById('modalBody'), 
-            modalConfirmBtn: document.getElementById('modalConfirmBtn'),
-            modalCancelBtn: document.getElementById('modalCancelBtn'), 
+            lockdownOverlayMessage: document.getElementById('lockdownMessage'),
             uptimeDisplay: document.getElementById('uptimeDisplay'),
-            // --- NEW: Added references for stale data styling ---
             flowDisplay: document.getElementById('flowDisplay'),
-            gaugeText: document.getElementById('gaugeText')
+            gaugeValue: document.querySelector('.gauge-value'),
+            forceReconnectBtn: document.getElementById('forceReconnectBtn'),
+            // --- NEW: Modal element references ---
+            confirmationModal: document.getElementById('confirmationModal'),
+            modalTitle: document.getElementById('modalTitle'),
+            modalBody: document.getElementById('modalBody'),
+            modalConfirmBtn: document.getElementById('modalConfirmBtn'),
+            modalCancelBtn: document.getElementById('modalCancelBtn'),
         };
 
         let socket, reconnectInterval = 1000, volumeChart = null, currentFlowRate = 0, currentTotalVolume = 0;
-        let confirmAction = null;
         let deviceOnlineStatus = false;
+        let confirmAction = null; // To store the function to run on modal confirmation
 
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host;
-            socket = new WebSocket(`${protocol}//${host}`);
+            socket = new WebSocket(`${protocol}//${window.location.host}`);
             setupSocketListeners();
         }
 
         function setupSocketListeners() {
-            socket.onopen = () => {
-                console.log('✅ WebSocket connected');
-                reconnectInterval = 1000;
-                showNotification('Connected to server', 'info');
-            };
-
+            socket.onopen = () => { console.log('✅ WebSocket connected'); reconnectInterval = 1000; };
             socket.onclose = () => {
                 console.warn('❌ WebSocket lost');
                 updateDeviceOnlineStatus(false);
                 setTimeout(connectWebSocket, Math.min(reconnectInterval, 30000));
                 reconnectInterval *= 2;
             };
-
             socket.onerror = (error) => console.error('WebSocket Error:', error);
-
             socket.onmessage = (event) => {
                 try {
-                    const message = JSON.parse(event.data);
-                    // --- CHANGED: Now extracting `isFresh` from the message ---
-                    const { type, payload, isOnline, isFresh } = message;
-                    
+                    const { type, payload, isOnline, isFresh } = JSON.parse(event.data);
                     if (type === 'initial-state' || type === 'data-update') {
-                        updateDeviceOnlineStatus(isOnline !== undefined ? isOnline : false);
-                        // --- CHANGED: Pass `isFresh` to the UI update function ---
-                        updateUI(payload, isFresh !== undefined ? isFresh : false);
+                        updateDeviceOnlineStatus(isOnline, payload);
+                        updateUI(payload, isFresh);
                     }
-                } catch (e) {
-                    console.error("Parse error:", e);
-                }
+                } catch (e) { console.error("Parse error:", e); }
             };
         }
 
@@ -227,8 +204,9 @@
 
         function unlockSystemSafety() { document.body.classList.remove('safety-lockdown'); }
 
-        function updateDeviceOnlineStatus(isOnline) {
+        function updateDeviceOnlineStatus(isOnline, payload = {}) {
             deviceOnlineStatus = isOnline;
+            const lastKnownVolume = currentTotalVolume; // Capture before potential UI updates
             
             if (isOnline) {
                 DOMElements.deviceStatus.textContent = 'ONLINE';
@@ -239,86 +217,96 @@
                 DOMElements.deviceStatus.textContent = 'OFFLINE';
                 DOMElements.deviceStatus.className = 'device-status-indicator offline';
                 DOMElements.flowCard.className = 'card offline-device';
-                DOMElements.flowRate.textContent = '--.--';
-                DOMElements.valveStatus.textContent = 'UNKNOWN';
-                DOMElements.valveStatus.className = 'status-value';
-                DOMElements.openBtn.disabled = true;
-                DOMElements.closeBtn.disabled = true;
                 lockSystemSafety('🔌 DEVICE OFFLINE', 'ESP32 is not responding. Check power and WiFi.');
+                
+                // --- NEW: Instant Offline Safety Display ---
+                // Visually confirm the valve is closed and stop showing flow.
+                DOMElements.valveStatus.textContent = 'CLOSED';
+                DOMElements.valveStatus.className = 'status-value closed';
+                
+                // --- NEW: Offline Flow Cutoff Logic ---
+                // If last known volume was > 25, zero out the flow rate display.
+                if (lastKnownVolume > 25) {
+                    DOMElements.flowRate.textContent = '0.00';
+                }
             }
+            
+            const isOpen = parseInt(payload[VPIN.VALVE_STATUS]) === 1;
+            DOMElements.openBtn.disabled = !isOnline || isOpen;
+            DOMElements.closeBtn.disabled = !isOnline || !isOpen;
         }
 
         function animateValue(start, end, duration, updater) {
             if (Math.abs(start - end) < 0.01) { updater(end); return; }
             let startTime = null;
-            const range = end - start;
-            function animationStep(timestamp) {
+            const step = (timestamp) => {
                 if (!startTime) startTime = timestamp;
                 const progress = Math.min((timestamp - startTime) / duration, 1);
-                updater(start + range * progress);
-                if (progress < 1) requestAnimationFrame(animationStep);
-            }
-            requestAnimationFrame(animationStep);
+                updater(start + (end - start) * progress);
+                if (progress < 1) requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
         }
 
         function formatUptime(seconds) {
             if (isNaN(seconds) || seconds < 0) return '--:--:--';
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = seconds % 60;
-            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+            const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+            const s = String(seconds % 60).padStart(2, '0');
+            return `${h}:${m}:${s}`;
         }
 
-        // --- CHANGED: `updateUI` now accepts the `isFresh` flag ---
         function updateUI(data, isFresh) {
-            // --- NEW: Logic to handle stale data display ---
-            if (isFresh) {
-                // If data is fresh, remove stale indicators
-                DOMElements.flowDisplay.classList.remove('stale-data');
-                DOMElements.gaugeText.classList.remove('stale-data');
-            } else {
-                // If data is not fresh, it means we are in the server's grace period.
-                // The flow/volume data is the last known value, so we mark it as stale.
-                DOMElements.flowDisplay.classList.add('stale-data');
-                DOMElements.gaugeText.classList.add('stale-data');
-            }
+            DOMElements.flowDisplay.classList.toggle('stale-data', !isFresh);
+            DOMElements.gaugeValue.classList.toggle('stale-data', !isFresh);
 
             if (data[VPIN.FLOW_RATE] !== undefined) {
-                const newFlowRate = parseFloat(data[VPIN.FLOW_RATE]);
-                animateValue(currentFlowRate, newFlowRate, 500, (val) => { DOMElements.flowRate.textContent = val.toFixed(2); });
-                currentFlowRate = newFlowRate;
+                const newFlow = parseFloat(data[VPIN.FLOW_RATE]);
+                animateValue(currentFlowRate, newFlow, 500, val => DOMElements.flowRate.textContent = val.toFixed(2));
+                currentFlowRate = newFlow;
             }
             if (data[VPIN.TOTAL_VOLUME] !== undefined) {
-                const newTotalVolume = parseFloat(data[VPIN.TOTAL_VOLUME]);
-                animateValue(currentTotalVolume, newTotalVolume, 500, (val) => { DOMElements.totalVolumeDisplay.textContent = `${val.toFixed(1)} L`; });
-                currentTotalVolume = newTotalVolume;
+                const newVolume = parseFloat(data[VPIN.TOTAL_VOLUME]);
+                animateValue(currentTotalVolume, newVolume, 500, val => {
+                    DOMElements.totalVolumeDisplay.textContent = `${val.toFixed(1)} L`;
+                    currentTotalVolume = val; // Update global volume inside animation
+                });
             }
             if (data[VPIN.VALVE_STATUS] !== undefined) {
-                const isOpen = parseInt(data[VPIN.VALVE_STATUS]) === 1;
-                DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
-                DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
-                DOMElements.openBtn.disabled = !deviceOnlineStatus || isOpen;
-                DOMElements.closeBtn.disabled = !deviceOnlineStatus || !isOpen;
+                optimisticallySetValveState(parseInt(data[VPIN.VALVE_STATUS]) === 1);
             }
             if (data[VPIN.ONLINE_STATUS] !== undefined) {
-                const uptimeSeconds = parseInt(data[VPIN.ONLINE_STATUS]);
-                DOMElements.uptimeDisplay.textContent = formatUptime(uptimeSeconds);
+                DOMElements.uptimeDisplay.textContent = formatUptime(parseInt(data[VPIN.ONLINE_STATUS]));
             }
-            let volumeLimit = parseFloat(DOMElements.volumeLimitDisplay.textContent.split(' ')[0]) || 100;
+            let volumeLimit = parseFloat(DOMElements.volumeLimitDisplay.textContent) || 100;
             if (data[VPIN.VOLUME_LIMIT] !== undefined) {
                 volumeLimit = parseFloat(data[VPIN.VOLUME_LIMIT]);
-                DOMElements.volumeLimitDisplay.textContent = `${volumeLimit.toFixed(1)} L`;
-                if (document.activeElement !== DOMElements.volumeLimitInput) DOMElements.volumeLimitInput.value = volumeLimit;
+                optimisticallySetVolumeLimit(volumeLimit);
             }
             updateGauge(currentTotalVolume, volumeLimit);
         }
+        
+        // --- NEW: Optimistic UI Helper Functions ---
+        function optimisticallySetValveState(isOpen) {
+            DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
+            DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
+            DOMElements.openBtn.disabled = !deviceOnlineStatus || isOpen;
+            DOMElements.closeBtn.disabled = !deviceOnlineStatus || !isOpen;
+        }
+
+        function optimisticallySetVolumeLimit(limit) {
+            DOMElements.volumeLimitDisplay.textContent = `${limit.toFixed(1)} L`;
+            if (document.activeElement !== DOMElements.volumeLimitInput) {
+                DOMElements.volumeLimitInput.value = limit;
+            }
+            updateGauge(currentTotalVolume, limit);
+        }
 
         function initializeGauge() {
-            const ctx = document.getElementById('volumeGauge').getContext('2d');
+             const ctx = document.getElementById('volumeGauge').getContext('2d');
             volumeChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: { datasets: [{ data: [0, 100], backgroundColor: ['#3498db', '#ecf0f1'], borderWidth: 0, borderRadius: 8, circumference: 270, rotation: -135 }] },
-                options: { cutout: '70%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, maintainAspectRatio: false, animation: { duration: 800, easing: 'easeOutQuart' } }
+                type: 'doughnut', data: { datasets: [{ data: [0, 100], backgroundColor: ['#3498db', '#ecf0f1'], borderWidth: 0, borderRadius: 8, circumference: 270, rotation: -135 }] },
+                options: { cutout: '70%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, maintainAspectRatio: false }
             });
         }
 
@@ -327,7 +315,7 @@
             const percent = Math.min((value / max) * 100, 100);
             volumeChart.data.datasets[0].data[0] = percent;
             volumeChart.data.datasets[0].data[1] = 100 - percent;
-            volumeChart.update();
+            volumeChart.update('none');
         }
 
         async function updateBlynkPinValue(pin, value) {
@@ -336,15 +324,15 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ pin, value })
                 });
-                if (!response.ok) throw new Error(`API failed: ${response.status}`);
+                if (!response.ok) throw new Error(`API failed with status ${response.status}`);
                 return response.json();
             } catch (error) {
-                console.error(`API Error:`, error);
-                showNotification('Command failed', 'error');
-                throw error;
+                console.error(`API Error on pin ${pin}:`, error);
+                showNotification('Command failed to send.', 'error');
+                throw error; // Re-throw to be caught by the caller
             }
         }
-        
+
         function showNotification(message, type = 'info') {
             const existing = document.querySelector('.notification');
             if (existing) existing.remove();
@@ -371,32 +359,77 @@
             confirmAction = null;
         }
 
+        function handleReconnectClick() {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                showNotification("Server connection is down. Please wait.", "error");
+                return;
+            }
+            socket.send(JSON.stringify({ type: 'force-poll' }));
+            const btn = DOMElements.forceReconnectBtn;
+            btn.disabled = true;
+            let countdown = 30;
+            btn.textContent = `Please wait (${countdown}s)...`;
+            const interval = setInterval(() => {
+                countdown--;
+                btn.textContent = `Please wait (${countdown}s)...`;
+                if (countdown <= 0) {
+                    clearInterval(interval);
+                    btn.disabled = false;
+                    btn.textContent = 'Try Reconnecting Now';
+                }
+            }, 1000);
+        }
+
         function setupEventListeners() {
+            // --- MODIFIED: Event Listeners with Optimistic Updates ---
             DOMElements.openBtn.addEventListener('click', () => {
+                const wasOpen = DOMElements.valveStatus.textContent === 'OPEN';
                 showNotification('Sending OPEN command', 'info');
+                optimisticallySetValveState(true);
                 updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1)
-                    .catch(() => showNotification('OPEN failed', 'error'));
-            });
-            DOMElements.closeBtn.addEventListener('click', () => {
-                showNotification('Sending CLOSE command', 'info');
-                updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1)
-                    .catch(() => showNotification('CLOSE failed', 'error'));
-            });
-            DOMElements.resetVolumeBtn.addEventListener('click', () => {
-                showConfirmation('Reset Volume?', 'Are you sure you want to reset the total volume? This cannot be undone.', () => {
-                    showNotification('Resetting volume', 'info');
-                    updateBlynkPinValue(VPIN.CMD_RESET_VOLUME, 1);
-                });
-            });
-            DOMElements.setLimitBtn.addEventListener('click', () => {
-                const limit = parseFloat(DOMElements.volumeLimitInput.value);
-                if (isNaN(limit) || limit < 1) { showNotification('Invalid limit', 'error'); return; }
-                showNotification(`Setting limit to ${limit} L`, 'info');
-                updateBlynkPinValue(VPIN.CMD_SET_LIMIT, limit)
-                    .then(() => showNotification('Limit updated', 'success'))
-                    .catch(err => showNotification('Failed to set limit', 'error'));
+                    .catch(() => {
+                        showNotification('OPEN command failed', 'error');
+                        optimisticallySetValveState(wasOpen); // Revert on failure
+                    });
             });
 
+            DOMElements.closeBtn.addEventListener('click', () => {
+                const wasOpen = DOMElements.valveStatus.textContent === 'OPEN';
+                showNotification('Sending CLOSE command', 'info');
+                optimisticallySetValveState(false);
+                updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1)
+                    .catch(() => {
+                        showNotification('CLOSE command failed', 'error');
+                        optimisticallySetValveState(wasOpen); // Revert on failure
+                    });
+            });
+
+            DOMElements.resetVolumeBtn.addEventListener('click', () => {
+                showConfirmation('Reset Volume?', 'This will reset the total volume counter to zero. This action cannot be undone.', () => {
+                    showNotification('Resetting volume...', 'info');
+                    updateBlynkPinValue(VPIN.CMD_RESET_VOLUME, 1)
+                        .then(() => showNotification('Volume reset successfully', 'success'))
+                        .catch(() => showNotification('Failed to reset volume', 'error'));
+                });
+            });
+
+            DOMElements.setLimitBtn.addEventListener('click', () => {
+                const newLimit = parseFloat(DOMElements.volumeLimitInput.value);
+                if (isNaN(newLimit) || newLimit < 1) {
+                    showNotification('Invalid limit. Must be a number >= 1.', 'error');
+                    return;
+                }
+                const oldLimit = parseFloat(DOMElements.volumeLimitDisplay.textContent) || 100;
+                showNotification(`Setting limit to ${newLimit} L`, 'info');
+                optimisticallySetVolumeLimit(newLimit);
+                updateBlynkPinValue(VPIN.CMD_SET_LIMIT, newLimit)
+                    .catch(() => {
+                        showNotification('Failed to set limit', 'error');
+                        optimisticallySetVolumeLimit(oldLimit); // Revert on failure
+                    });
+            });
+
+            DOMElements.forceReconnectBtn.addEventListener('click', handleReconnectClick);
             DOMElements.modalCancelBtn.addEventListener('click', hideConfirmation);
             DOMElements.modalConfirmBtn.addEventListener('click', () => {
                 if (typeof confirmAction === 'function') confirmAction();
@@ -413,3 +446,4 @@
     </script>
 </body>
 </html>
+

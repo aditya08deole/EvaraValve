@@ -10,6 +10,6 @@ services:
       - key: NODE_ENV
         value: production
       - key: BLYNK_AUTH_TOKEN
-        # This value MUST be set in your Render dashboard Environment tab
+        # This value MUST be set in your Render dashboard Environment 
         sync: false 
 

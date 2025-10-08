@@ -9,7 +9,7 @@
         :root {
             --primary-color: #3498db; --secondary-color: #2c3e50;
             --success-color: #2ecc71; --danger-color: #e74c3c;
-            --warning-color: #f39c12; --light-bg: #f8f9fa; --border-color: #e9ecef;
+            --light-bg: #f8f9fa; --border-color: #e9ecef;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d); color: #333; min-height: 100vh; padding: 20px; }
@@ -23,42 +23,28 @@
         .card.offline-device { border-left: 5px solid var(--danger-color); }
         .card-title { font-size: 1.5rem; margin-bottom: 15px; color: var(--secondary-color); text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; }
         .device-status-indicator { position: absolute; top: 15px; right: 20px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
-        .device-status-indicator.online { background-color: var(--success-color); color: white; animation: pulse-success 2s infinite; }
+        .device-status-indicator.online { background-color: var(--success-color); color: white; animation: pulse 2s infinite; }
         .device-status-indicator.offline { background-color: var(--danger-color); color: white; }
-        .device-status-indicator.reconnecting { background-color: var(--warning-color); color: white; animation: pulse-warning 1.2s infinite; }
-        @keyframes pulse-success { 0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(46, 204, 113, 0); } 100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); } }
-        @keyframes pulse-warning { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(46, 204, 113, 0); } 100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); } }
         .notification { position: fixed; top: 20px; right: 20px; background: var(--success-color); color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateX(120%); transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); z-index: 1002; font-weight: 500; }
         .notification.show { transform: translateX(0); }
         .notification.error { background: var(--danger-color); }
         .notification.info { background: var(--primary-color); }
-        .notification.warning { background: var(--warning-color); }
         .status-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; margin-bottom: 10px; background: var(--light-bg); border-radius: 8px; font-size: 14px; border: 1px solid var(--border-color); }
         .status-label { font-weight: 500; color: var(--secondary-color); }
-        .status-value { font-weight: 700; }
+        .status-value { font-weight: 700; color: var(--text-color); }
         .status-value.open { color: var(--success-color); }
         .status-value.closed { color: var(--danger-color); }
-        
-        /* --- UPDATED OVERLAY STYLES --- */
-        .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; flex-direction: column; transition: opacity 0.3s ease; opacity: 0; pointer-events: none; }
+        .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; font-size: 1.5rem; font-weight: bold; flex-direction: column; transition: opacity 0.3s ease; opacity: 0; pointer-events: none; }
         body.safety-lockdown .safety-lockdown-overlay { opacity: 1; pointer-events: auto; }
-        .lockdown-message { font-size: 1.5rem; font-weight: bold; }
         .lockdown-message small { font-size: 1rem; font-weight: 400; color: #bdc3c7; margin-top: 10px; display: block; }
-        
+        body.safety-lockdown .btn, body.safety-lockdown .limit-set-btn { cursor: not-allowed; filter: grayscale(80%); pointer-events: none; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .btn { padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .btn-open { background: linear-gradient(to right, #2ecc71, #27ae60); color: white; }
         .btn-close { background: linear-gradient(to right, #e74c3c, #c0392b); color: white; }
-        .btn:disabled, .btn-reconnect:disabled { background: #95a5a6; cursor: not-allowed; opacity: 0.7; transform: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .btn:hover:not(:disabled), .btn-reconnect:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 7px 10px rgba(0,0,0,0.2); }
-        
-        /* --- UPDATED RECONNECT PANEL STYLES --- */
-        .reconnect-panel { margin-top: 25px; padding: 15px; width: 90%; max-width: 400px; text-align: center; display: none; }
-        .reconnect-panel.visible { display: block; animation: fadeIn 0.5s 0.2s ease forwards; opacity: 0; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .btn-reconnect { background: linear-gradient(to right, #f39c12, #e67e22); color: white; width: 100%; padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .reconnect-status { font-size: 1rem; color: #f1c40f; margin-top: 15px; font-weight: 500; min-height: 20px; }
-
+        .btn:disabled { background: #95a5a6; cursor: not-allowed; opacity: 0.7; }
+        .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 7px 10px rgba(0,0,0,0.2); }
         .flow-display { text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; margin-bottom: 20px; }
         .flow-value { font-size: 3rem; font-weight: bold; margin-bottom: 5px; }
         .flow-unit { font-size: 1.2rem; opacity: 0.9; }
@@ -77,6 +63,8 @@
         .limit-set-btn:hover:not(:disabled) { background: #2980b9; }
         .reset-buttons { display: flex; gap: 10px; margin-top: 15px; justify-content: center; }
         .btn-small-reset { padding: 8px 16px; font-size: 0.8rem; background: linear-gradient(to right, #3498db, #2980b9); color: white; border: none; border-radius: 50px; cursor: pointer; }
+        
+        /* --- NEW: Custom Confirmation Modal --- */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1001; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
         .modal-content { background: white; padding: 30px; border-radius: 15px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transform: scale(0.9); transition: transform 0.3s ease; }
@@ -92,18 +80,13 @@
 <body>
     
     <div class="safety-lockdown-overlay">
-        <div> <div class="lockdown-message">
-                🛡️ CONNECTING...
-                <small>Establishing secure connection to the server.</small>
-            </div>
-            
-            <div class="reconnect-panel" id="reconnectPanel">
-                <button class="btn-reconnect" id="reconnectBtn">🔄 TRY RECONNECTING</button>
-                <div class="reconnect-status" id="reconnectStatus"></div>
-            </div>
+        <div class="lockdown-message">
+            🛡️ CONNECTING...
+            <small>Establishing secure connection to the server.</small>
         </div>
     </div>
     
+    <!-- NEW: Custom Confirmation Modal HTML -->
     <div class="modal-overlay" id="confirmationModal">
         <div class="modal-content">
             <h3 class="modal-title" id="modalTitle">Are you sure?</h3>
@@ -118,19 +101,20 @@
     <div class="container">
         <header>
             <h1>🌊 EvaraTap Smart Flow Control</h1>
-            <p>High-Performance IoT Water Management v3.0</p>
+            <p>High-Performance IoT Water Management</p>
         </header>
         
         <div class="dashboard">
+            <!-- Flow Control Card -->
             <div class="card" id="flowCard">
                 <div class="device-status-indicator" id="deviceStatus">CONNECTING</div>
                 <h2 class="card-title">💧 Flow Control</h2>
                 <div class="flow-display"><div class="flow-value" id="flowRate">--.--</div><div class="flow-unit">L/min</div></div>
                 <div class="status-item"><span class="status-label">Valve Status</span><span class="status-value" id="valveStatus">UNKNOWN</span></div>
-                
                 <div class="controls"><button class="btn btn-open" id="openBtn">OPEN VALVE</button><button class="btn btn-close" id="closeBtn">CLOSE VALVE</button></div>
             </div>
             
+            <!-- Volume Analytics Card -->
             <div class="card">
                 <h2 class="card-title">📊 Volume Analytics</h2>
                 <div class="gauge-wrapper">
@@ -144,14 +128,15 @@
                     <div class="config-header">Set Auto-Shutoff Limit</div>
                     <div class="input-group"><input type="number" class="limit-input" id="volumeLimitInput" placeholder="e.g., 100" min="1" max="9999"><button class="limit-set-btn" id="setLimitBtn">SET</button></div>
                 </div>
-                <div class="reset-buttons"><button class="btn-small-reset" id="resetVolumeBtn">RESET TOTAL VOLUME</button></div>
+                <div class="reset-buttons"><button class="btn btn-small-reset" id="resetVolumeBtn">RESET TOTAL VOLUME</button></div>
             </div>
         </div>
     </div>
 
     <script>
-        // --- VIRTUAL PINS & DOM ELEMENTS ---
+        // --- VIRTUAL PINS MAPPING ---
         const VPIN = { TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2', VOLUME_LIMIT: 'v4', ONLINE_STATUS: 'v5', CMD_OPEN_VALVE: 'v10', CMD_CLOSE_VALVE: 'v11', CMD_RESET_VOLUME: 'v12', CMD_SET_LIMIT: 'v13' };
+
         const DOMElements = {
             deviceStatus: document.getElementById('deviceStatus'), flowRate: document.getElementById('flowRate'), valveStatus: document.getElementById('valveStatus'),
             totalVolumeDisplay: document.getElementById('totalVolumeDisplay'), volumeLimitDisplay: document.getElementById('volumeLimitDisplay'),
@@ -159,18 +144,19 @@
             setLimitBtn: document.getElementById('setLimitBtn'), resetVolumeBtn: document.getElementById('resetVolumeBtn'), flowCard: document.getElementById('flowCard'),
             lockdownOverlayMessage: document.querySelector('.lockdown-message'), confirmationModal: document.getElementById('confirmationModal'),
             modalTitle: document.getElementById('modalTitle'), modalBody: document.getElementById('modalBody'), modalConfirmBtn: document.getElementById('modalConfirmBtn'),
-            modalCancelBtn: document.getElementById('modalCancelBtn'), reconnectPanel: document.getElementById('reconnectPanel'),
-            reconnectBtn: document.getElementById('reconnectBtn'), reconnectStatus: document.getElementById('reconnectStatus')
+            modalCancelBtn: document.getElementById('modalCancelBtn'),
         };
 
         // --- STATE & ANIMATION VARIABLES ---
-        let socket, reconnectInterval = 1000, volumeChart = null, currentFlowRate = 0, currentTotalVolume = 0;
-        let confirmAction = null, isDeviceOnline = false, isReconnecting = false, reconnectCooldownTimer = null;
+        let socket, reconnectInterval = 1000, volumeChart = null, currentFlowRate = 0, currentTotalVolume = 0, deviceDataTimeout = null;
+        const DEVICE_OFFLINE_THRESHOLD = 25000;
+        let confirmAction = null;
 
-        // --- WEBSOCKET CONNECTION ---
+        // --- WEBSOCKET CONNECTION LOGIC ---
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            socket = new WebSocket(`${protocol}//${window.location.host}`);
+            const host = window.location.host;
+            socket = new WebSocket(`${protocol}//${host}`);
             setupSocketListeners();
         }
 
@@ -178,184 +164,77 @@
             socket.onopen = () => {
                 console.log('✅ WebSocket connection established.');
                 reconnectInterval = 1000;
-                unlockSystemSafety();
+                showNotification('Connected to server! Waiting for device data...', 'info');
             };
+
             socket.onclose = () => {
                 console.warn('❌ WebSocket connection lost. Attempting to reconnect...');
-                updateDeviceOnlineStatus(false);
-                lockSystemSafety('🔌 SERVER DISCONNECTED', 'Connection to the server was lost. Reconnecting...');
-                setTimeout(connectWebSocket, Math.min(reconnectInterval *= 2, 30000));
+                updateDeviceOnlineStatus(false, 'SERVER');
+                clearTimeout(deviceDataTimeout); 
+                const timeout = Math.min(reconnectInterval, 30000); 
+                setTimeout(connectWebSocket, timeout);
+                reconnectInterval *= 2; 
             };
-            socket.onerror = (error) => console.error('WebSocket Error:', error);
+
+            socket.onerror = (error) => { console.error('WebSocket Error:', error); };
+
             socket.onmessage = (event) => {
+                // FIXED CORE LOGIC: Any message resets the timer and marks device as online.
+                clearTimeout(deviceDataTimeout);
+                updateDeviceOnlineStatus(true);
+                unlockSystemSafety();
+
                 try {
                     const message = JSON.parse(event.data);
                     const { type, payload } = message;
-                    
-                    switch (type) {
-                        case 'initial-state':
-                            updateUI(payload.data || {});
-                            updateDeviceOnlineStatus(payload.online);
-                            if (payload.isReconnecting) {
-                                updateReconnectUI('reconnecting', 0, 5);
-                            }
-                            break;
-                        case 'data-update':
-                            updateUI(payload);
-                            break;
-                        case 'status-update':
-                            updateDeviceOnlineStatus(payload.online);
-                            break;
-                        case 'reconnect-status':
-                            updateReconnectUI(payload.status, payload.currentAttempt, payload.totalAttempts);
-                            break;
+                    if (type === 'initial-state' || type === 'data-update') {
+                        updateUI(payload);
                     }
                 } catch (e) {
-                    console.error("Failed to parse socket message:", e);
+                    console.error("Failed to parse incoming socket message:", event.data, e);
+                    return; // Stop processing this malformed message
                 }
+
+                // Set a new timeout. If no message arrives in the next 15 seconds,
+                // the device will be marked as offline.
+                deviceDataTimeout = setTimeout(() => {
+                    console.warn(`Device data timeout! No data received for ${DEVICE_OFFLINE_THRESHOLD / 1000}s.`);
+                    updateDeviceOnlineStatus(false, 'DEVICE');
+                }, DEVICE_OFFLINE_THRESHOLD);
             };
         }
 
-        // --- UI & STATUS MANAGEMENT ---
+        // --- SAFETY & STATUS LOGIC ---
         function lockSystemSafety(title, subtitle) {
             document.body.classList.add('safety-lockdown');
             DOMElements.lockdownOverlayMessage.innerHTML = `${title}<small>${subtitle}</small>`;
         }
 
-        function unlockSystemSafety() {
-            document.body.classList.remove('safety-lockdown');
-        }
+        function unlockSystemSafety() { document.body.classList.remove('safety-lockdown'); }
 
-        function updateDeviceOnlineStatus(online) {
-            if (isDeviceOnline === online && document.body.classList.contains('safety-lockdown') === !online) return;
-            isDeviceOnline = online;
-            
-            if (online) {
+        function updateDeviceOnlineStatus(isOnline, source = 'DEVICE') {
+            if (isOnline) {
                 DOMElements.deviceStatus.textContent = 'ONLINE';
                 DOMElements.deviceStatus.className = 'device-status-indicator online';
                 DOMElements.flowCard.className = 'card online-device';
-                DOMElements.reconnectPanel.classList.remove('visible'); // Hide panel
-                unlockSystemSafety();
             } else {
                 DOMElements.deviceStatus.textContent = 'OFFLINE';
                 DOMElements.deviceStatus.className = 'device-status-indicator offline';
                 DOMElements.flowCard.className = 'card offline-device';
-                DOMElements.reconnectPanel.classList.add('visible'); // Show panel
-                lockSystemSafety('🔌 DEVICE OFFLINE', 'Hardware not responding.');
-                updateUI({ [VPIN.FLOW_RATE]: 0, [VPIN.VALVE_STATUS]: 0 });
-            }
-        }
-
-        function updateReconnectUI(status, currentAttempt, totalAttempts) {
-            switch (status) {
-                case 'reconnecting':
-                    isReconnecting = true;
-                    DOMElements.deviceStatus.textContent = 'RECONNECTING';
-                    DOMElements.deviceStatus.className = 'device-status-indicator reconnecting';
-                    DOMElements.reconnectStatus.textContent = `Attempting... (${currentAttempt}/${totalAttempts})`;
-                    break;
-                case 'success':
-                    isReconnecting = false;
-                    DOMElements.reconnectStatus.textContent = `✅ Success! Device is online.`;
-                    showNotification('Device reconnected successfully!', 'success');
-                    setTimeout(() => { DOMElements.reconnectStatus.textContent = ''; }, 3000);
-                    break;
-                case 'failed':
-                    isReconnecting = false;
-                    DOMElements.reconnectStatus.textContent = `❌ Failed. Please try again.`;
-                    showNotification('Could not reconnect to the device.', 'error');
-                    break;
-            }
-        }
-
-        // --- API CALLS & EVENT HANDLERS ---
-        async function triggerManualReconnect() {
-            if (isReconnecting) return;
-            try {
-                const response = await fetch('/api/reconnect', { method: 'POST' });
-                const data = await response.json();
+                DOMElements.flowRate.textContent = '--.--';
+                DOMElements.valveStatus.textContent = 'UNKNOWN';
+                DOMElements.valveStatus.className = 'status-value';
                 
-                if (response.status === 429) {
-                    showNotification(`Please wait ${data.remainingSeconds}s`, 'warning');
-                    startReconnectCooldown(data.remainingSeconds);
-                } else if (response.status === 202) {
-                    startReconnectCooldown(10);
-                } else if (!response.ok) {
-                   throw new Error(data.error || 'Unknown error');
-                }
-            } catch (error) {
-                console.error('Reconnect API Error:', error);
-                showNotification('Failed to start reconnect sequence', 'error');
-            }
-        }
+                // FIXED: Ensure control buttons are disabled when offline
+                DOMElements.openBtn.disabled = true;
+                DOMElements.closeBtn.disabled = true;
 
-        function startReconnectCooldown(seconds) {
-            if (reconnectCooldownTimer) clearInterval(reconnectCooldownTimer);
-            let remaining = seconds;
-            DOMElements.reconnectBtn.disabled = true;
-            
-            const updateButtonText = () => {
-                DOMElements.reconnectBtn.textContent = `⏳ Wait ${remaining}s`;
-            };
-            updateButtonText();
-
-            reconnectCooldownTimer = setInterval(() => {
-                remaining--;
-                if (remaining > 0) {
-                    updateButtonText();
-                } else {
-                    clearInterval(reconnectCooldownTimer);
-                    DOMElements.reconnectBtn.disabled = false;
-                    DOMElements.reconnectBtn.textContent = '🔄 TRY RECONNECTING';
-                }
-            }, 1000);
-        }
-
-        async function updateBlynkPinValue(pin, value) {
-            try {
-                const response = await fetch('/api/update-pin', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pin, value })
-                });
-                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-                return response.json();
-            } catch (error) {
-                console.error(`API Error (update-pin):`, error);
-                showNotification('Command failed to send.', 'error');
-                throw error;
+                if (source === 'DEVICE') lockSystemSafety('🔌 DEVICE OFFLINE', 'The hardware has stopped sending data.');
+                else if (source === 'SERVER') lockSystemSafety('🛡️ SERVER OFFLINE', 'Connection to the server was lost. Reconnecting...');
             }
         }
         
-        function setupEventListeners() {
-            DOMElements.reconnectBtn.addEventListener('click', triggerManualReconnect);
-            DOMElements.openBtn.addEventListener('click', () => {
-                showNotification('Sending OPEN command...', 'info');
-                updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1);
-            });
-            DOMElements.closeBtn.addEventListener('click', () => {
-                showNotification('Sending CLOSE command...', 'info');
-                updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1);
-            });
-            DOMElements.resetVolumeBtn.addEventListener('click', () => {
-                showConfirmation('Reset Volume?', 'Are you sure you want to reset the total volume? This cannot be undone.', () => {
-                    showNotification('Resetting volume...', 'info');
-                    updateBlynkPinValue(VPIN.CMD_RESET_VOLUME, 1);
-                });
-            });
-            DOMElements.setLimitBtn.addEventListener('click', () => {
-                const limit = parseFloat(DOMElements.volumeLimitInput.value);
-                if (isNaN(limit) || limit < 1) { showNotification('Please enter a valid limit.', 'error'); return; }
-                showNotification(`Setting limit to ${limit} L...`, 'info');
-                updateBlynkPinValue(VPIN.CMD_SET_LIMIT, limit);
-            });
-            DOMElements.modalCancelBtn.addEventListener('click', hideConfirmation);
-            DOMElements.modalConfirmBtn.addEventListener('click', () => {
-                if (typeof confirmAction === 'function') confirmAction();
-                hideConfirmation();
-            });
-        }
-
-        // --- UI, UTILITY & INITIALIZATION FUNCTIONS ---
+        // --- UI UPDATE & ANIMATION LOGIC ---
         function animateValue(start, end, duration, updater) {
             if (Math.abs(start - end) < 0.01) { updater(end); return; }
             let startTime = null;
@@ -384,8 +263,8 @@
                 const isOpen = parseInt(data[VPIN.VALVE_STATUS]) === 1;
                 DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
                 DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
-                DOMElements.openBtn.disabled = isOpen || !isDeviceOnline;
-                DOMElements.closeBtn.disabled = !isOpen || !isDeviceOnline;
+                DOMElements.openBtn.disabled = isOpen;
+                DOMElements.closeBtn.disabled = !isOpen;
             }
             let volumeLimit = parseFloat(DOMElements.volumeLimitDisplay.textContent.split(' ')[0]) || 100;
             if (data[VPIN.VOLUME_LIMIT] !== undefined) {
@@ -410,9 +289,25 @@
             const percent = Math.min((value / max) * 100, 100);
             volumeChart.data.datasets[0].data[0] = percent;
             volumeChart.data.datasets[0].data[1] = 100 - percent;
-            volumeChart.update('none');
+            volumeChart.update();
         }
 
+        // --- API COMMANDS & NOTIFICATIONS ---
+        async function updateBlynkPinValue(pin, value) {
+            try {
+                const response = await fetch('/api/update-pin', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin, value })
+                });
+                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+                return response.json();
+            } catch (error) {
+                console.error(`API Error (update-pin):`, error);
+                showNotification('Command failed to send.', 'error');
+                throw error;
+            }
+        }
+        
         function showNotification(message, type = 'info') {
             const existing = document.querySelector('.notification');
             if (existing) existing.remove();
@@ -427,6 +322,7 @@
             }, 3000);
         }
 
+        // --- NEW: Custom Confirmation Modal Logic ---
         function showConfirmation(title, body, onConfirm) {
             DOMElements.modalTitle.textContent = title;
             DOMElements.modalBody.textContent = body;
@@ -439,10 +335,49 @@
             confirmAction = null;
         }
 
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            DOMElements.openBtn.addEventListener('click', () => {
+                showNotification('Sending OPEN command...', 'info');
+                updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1)
+                    .catch(() => showNotification('OPEN command failed.', 'error')); // FIXED: Error handling
+            });
+            DOMElements.closeBtn.addEventListener('click', () => {
+                showNotification('Sending CLOSE command...', 'info');
+                updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1)
+                    .catch(() => showNotification('CLOSE command failed.', 'error')); // FIXED: Error handling
+            });
+            DOMElements.resetVolumeBtn.addEventListener('click', () => {
+                // FIXED: Replaced window.confirm with custom modal
+                showConfirmation('Reset Volume?', 'Are you sure you want to reset the total volume? This cannot be undone.', () => {
+                    showNotification('Resetting volume...', 'info');
+                    updateBlynkPinValue(VPIN.CMD_RESET_VOLUME, 1);
+                });
+            });
+            DOMElements.setLimitBtn.addEventListener('click', () => {
+                const limit = parseFloat(DOMElements.volumeLimitInput.value);
+                if (isNaN(limit) || limit < 1) { showNotification('Please enter a valid limit.', 'error'); return; }
+                showNotification(`Setting limit to ${limit} L...`, 'info');
+                updateBlynkPinValue(VPIN.CMD_SET_LIMIT, limit)
+                    .then(() => showNotification('Limit updated successfully!', 'success'))
+                    .catch(err => showNotification('Failed to set limit', 'error'));
+            });
+
+            // NEW: Event listeners for the custom modal
+            DOMElements.modalCancelBtn.addEventListener('click', hideConfirmation);
+            DOMElements.modalConfirmBtn.addEventListener('click', () => {
+                if (typeof confirmAction === 'function') {
+                    confirmAction();
+                }
+                hideConfirmation();
+            });
+        }
+
+        // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
             initializeGauge();
             setupEventListeners();
-            lockSystemSafety('🛡️ CONNECTING...', 'Establishing connection to the server.');
+            lockSystemSafety('🛡️ CONNECTING...', 'Establishing secure connection to the server.');
             connectWebSocket();
         });
     </script>

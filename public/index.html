@@ -35,7 +35,7 @@
         .status-value { font-weight: 700; }
         .status-value.open { color: var(--success-color); }
         .status-value.closed { color: var(--danger-color); }
-        .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.7); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; flex-direction: column; transition: opacity 0.5s ease; /* Enhanced transition for smooth fade */ opacity: 0; pointer-events: none; }
+        .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.7); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; flex-direction: column; transition: opacity 0.5s ease; opacity: 0; pointer-events: none; }
         body.safety-lockdown .safety-lockdown-overlay { opacity: 1; pointer-events: auto; }
         .lockdown-message { font-size: 1.5rem; font-weight: bold; }
         .lockdown-message small { font-size: 1rem; font-weight: 400; color: #bdc3c7; margin-top: 10px; display: block; }
@@ -70,8 +70,6 @@
         .limit-set-btn:hover:not(:disabled) { background: #2980b9; }
         .reset-buttons { display: flex; gap: 10px; margin-top: 15px; justify-content: center; }
         .btn-small-reset { padding: 8px 16px; font-size: 0.8rem; background: linear-gradient(to right, #3498db, #2980b9); color: white; border: none; border-radius: 50px; cursor: pointer; }
-        
-        /* --- MODAL STYLES --- */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1001; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
         .modal-content { background: white; padding: 30px; border-radius: 15px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transform: scale(0.9); transition: transform 0.3s ease; }
@@ -85,7 +83,6 @@
     </style>
 </head>
 <body>
-    
     <div class="safety-lockdown-overlay">
         <div>
             <div class="lockdown-message" id="lockdownMessage">
@@ -159,7 +156,6 @@
             flowDisplay: document.getElementById('flowDisplay'),
             gaugeValue: document.querySelector('.gauge-value'),
             forceReconnectBtn: document.getElementById('forceReconnectBtn'),
-            // --- NEW: Modal element references ---
             confirmationModal: document.getElementById('confirmationModal'),
             modalTitle: document.getElementById('modalTitle'),
             modalBody: document.getElementById('modalBody'),
@@ -169,7 +165,7 @@
 
         let socket, reconnectInterval = 1000, volumeChart = null, currentFlowRate = 0, currentTotalVolume = 0;
         let deviceOnlineStatus = false;
-        let confirmAction = null; // To store the function to run on modal confirmation
+        let confirmAction = null;
 
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -206,7 +202,7 @@
 
         function updateDeviceOnlineStatus(isOnline, payload = {}) {
             deviceOnlineStatus = isOnline;
-            const lastKnownVolume = currentTotalVolume; // Capture before potential UI updates
+            const lastKnownVolume = currentTotalVolume;
             
             if (isOnline) {
                 DOMElements.deviceStatus.textContent = 'ONLINE';
@@ -219,13 +215,9 @@
                 DOMElements.flowCard.className = 'card offline-device';
                 lockSystemSafety('🔌 DEVICE OFFLINE', 'ESP32 is not responding. Check power and WiFi.');
                 
-                // --- NEW: Instant Offline Safety Display ---
-                // Visually confirm the valve is closed and stop showing flow.
                 DOMElements.valveStatus.textContent = 'CLOSED';
                 DOMElements.valveStatus.className = 'status-value closed';
                 
-                // --- NEW: Offline Flow Cutoff Logic ---
-                // If last known volume was > 25, zero out the flow rate display.
                 if (lastKnownVolume > 25) {
                     DOMElements.flowRate.textContent = '0.00';
                 }
@@ -269,7 +261,7 @@
                 const newVolume = parseFloat(data[VPIN.TOTAL_VOLUME]);
                 animateValue(currentTotalVolume, newVolume, 500, val => {
                     DOMElements.totalVolumeDisplay.textContent = `${val.toFixed(1)} L`;
-                    currentTotalVolume = val; // Update global volume inside animation
+                    currentTotalVolume = val;
                 });
             }
             if (data[VPIN.VALVE_STATUS] !== undefined) {
@@ -286,7 +278,6 @@
             updateGauge(currentTotalVolume, volumeLimit);
         }
         
-        // --- NEW: Optimistic UI Helper Functions ---
         function optimisticallySetValveState(isOpen) {
             DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
             DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
@@ -329,7 +320,7 @@
             } catch (error) {
                 console.error(`API Error on pin ${pin}:`, error);
                 showNotification('Command failed to send.', 'error');
-                throw error; // Re-throw to be caught by the caller
+                throw error;
             }
         }
 
@@ -381,7 +372,6 @@
         }
 
         function setupEventListeners() {
-            // --- MODIFIED: Event Listeners with Optimistic Updates ---
             DOMElements.openBtn.addEventListener('click', () => {
                 const wasOpen = DOMElements.valveStatus.textContent === 'OPEN';
                 showNotification('Sending OPEN command', 'info');
@@ -389,7 +379,7 @@
                 updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1)
                     .catch(() => {
                         showNotification('OPEN command failed', 'error');
-                        optimisticallySetValveState(wasOpen); // Revert on failure
+                        optimisticallySetValveState(wasOpen);
                     });
             });
 
@@ -400,7 +390,7 @@
                 updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1)
                     .catch(() => {
                         showNotification('CLOSE command failed', 'error');
-                        optimisticallySetValveState(wasOpen); // Revert on failure
+                        optimisticallySetValveState(wasOpen);
                     });
             });
 
@@ -425,7 +415,7 @@
                 updateBlynkPinValue(VPIN.CMD_SET_LIMIT, newLimit)
                     .catch(() => {
                         showNotification('Failed to set limit', 'error');
-                        optimisticallySetVolumeLimit(oldLimit); // Revert on failure
+                        optimisticallySetVolumeLimit(oldLimit);
                     });
             });
 

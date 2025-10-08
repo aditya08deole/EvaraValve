@@ -32,33 +32,13 @@
         .notification.info { background: var(--primary-color); }
         .status-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; margin-bottom: 10px; background: var(--light-bg); border-radius: 8px; font-size: 14px; border: 1px solid var(--border-color); }
         .status-label { font-weight: 500; color: var(--secondary-color); }
-        .status-value { font-weight: 700; }
+        .status-value { font-weight: 700; color: var(--text-color); }
         .status-value.open { color: var(--success-color); }
         .status-value.closed { color: var(--danger-color); }
         .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; font-size: 1.5rem; font-weight: bold; flex-direction: column; transition: opacity 0.3s ease; opacity: 0; pointer-events: none; }
         body.safety-lockdown .safety-lockdown-overlay { opacity: 1; pointer-events: auto; }
         .lockdown-message small { font-size: 1rem; font-weight: 400; color: #bdc3c7; margin-top: 10px; display: block; }
         body.safety-lockdown .btn, body.safety-lockdown .limit-set-btn { cursor: not-allowed; filter: grayscale(80%); pointer-events: none; }
-        
-        /* --- NEW: Idle Poll Timer Styling --- */
-        .idle-poll-timer {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background-color: rgba(44, 62, 80, 0.8);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            z-index: 1001; /* Higher than the lockdown overlay */
-            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-            display: none; /* Hidden by default */
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        .idle-poll-timer.show { display: block; opacity: 1; }
-
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .btn { padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .btn-open { background: linear-gradient(to right, #2ecc71, #27ae60); color: white; }
@@ -83,6 +63,8 @@
         .limit-set-btn:hover:not(:disabled) { background: #2980b9; }
         .reset-buttons { display: flex; gap: 10px; margin-top: 15px; justify-content: center; }
         .btn-small-reset { padding: 8px 16px; font-size: 0.8rem; background: linear-gradient(to right, #3498db, #2980b9); color: white; border: none; border-radius: 50px; cursor: pointer; }
+        
+        /* --- NEW: Custom Confirmation Modal --- */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1001; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
         .modal-content { background: white; padding: 30px; border-radius: 15px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transform: scale(0.9); transition: transform 0.3s ease; }
@@ -104,8 +86,7 @@
         </div>
     </div>
     
-    <div id="idlePollTimer" class="idle-poll-timer">Next Check: 01:30</div>
-
+    <!-- NEW: Custom Confirmation Modal HTML -->
     <div class="modal-overlay" id="confirmationModal">
         <div class="modal-content">
             <h3 class="modal-title" id="modalTitle">Are you sure?</h3>
@@ -124,6 +105,7 @@
         </header>
         
         <div class="dashboard">
+            <!-- Flow Control Card -->
             <div class="card" id="flowCard">
                 <div class="device-status-indicator" id="deviceStatus">CONNECTING</div>
                 <h2 class="card-title">💧 Flow Control</h2>
@@ -132,6 +114,7 @@
                 <div class="controls"><button class="btn btn-open" id="openBtn">OPEN VALVE</button><button class="btn btn-close" id="closeBtn">CLOSE VALVE</button></div>
             </div>
             
+            <!-- Volume Analytics Card -->
             <div class="card">
                 <h2 class="card-title">📊 Volume Analytics</h2>
                 <div class="gauge-wrapper">
@@ -151,7 +134,8 @@
     </div>
 
     <script>
-        const VPIN = { TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2', VOLUME_LIMIT: 'v4', CMD_OPEN_VALVE: 'v10', CMD_CLOSE_VALVE: 'v11', CMD_RESET_VOLUME: 'v12', CMD_SET_LIMIT: 'v13' };
+        // --- VIRTUAL PINS MAPPING ---
+        const VPIN = { TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2', VOLUME_LIMIT: 'v4', ONLINE_STATUS: 'v5', CMD_OPEN_VALVE: 'v10', CMD_CLOSE_VALVE: 'v11', CMD_RESET_VOLUME: 'v12', CMD_SET_LIMIT: 'v13' };
 
         const DOMElements = {
             deviceStatus: document.getElementById('deviceStatus'), flowRate: document.getElementById('flowRate'), valveStatus: document.getElementById('valveStatus'),
@@ -161,13 +145,14 @@
             lockdownOverlayMessage: document.querySelector('.lockdown-message'), confirmationModal: document.getElementById('confirmationModal'),
             modalTitle: document.getElementById('modalTitle'), modalBody: document.getElementById('modalBody'), modalConfirmBtn: document.getElementById('modalConfirmBtn'),
             modalCancelBtn: document.getElementById('modalCancelBtn'),
-            idlePollTimer: document.getElementById('idlePollTimer'), // NEW: Timer element
         };
 
-        let socket, reconnectInterval = 1000, volumeChart = null, currentFlowRate = 0, currentTotalVolume = 0;
+        // --- STATE & ANIMATION VARIABLES ---
+        let socket, reconnectInterval = 1000, volumeChart = null, currentFlowRate = 0, currentTotalVolume = 0, deviceDataTimeout = null;
+        const DEVICE_OFFLINE_THRESHOLD = 25000;
         let confirmAction = null;
-        let idlePollCountdownInterval = null; // NEW: Interval ID for the timer
 
+        // --- WEBSOCKET CONNECTION LOGIC ---
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
@@ -185,7 +170,7 @@
             socket.onclose = () => {
                 console.warn('❌ WebSocket connection lost. Attempting to reconnect...');
                 updateDeviceOnlineStatus(false, 'SERVER');
-                stopIdlePollTimer(); // NEW: Stop timer if server connection is lost
+                clearTimeout(deviceDataTimeout); 
                 const timeout = Math.min(reconnectInterval, 30000); 
                 setTimeout(connectWebSocket, timeout);
                 reconnectInterval *= 2; 
@@ -194,72 +179,44 @@
             socket.onerror = (error) => { console.error('WebSocket Error:', error); };
 
             socket.onmessage = (event) => {
+                // FIXED CORE LOGIC: Any message resets the timer and marks device as online.
+                clearTimeout(deviceDataTimeout);
+                updateDeviceOnlineStatus(true);
+                unlockSystemSafety();
+
                 try {
                     const message = JSON.parse(event.data);
                     const { type, payload } = message;
-
                     if (type === 'initial-state' || type === 'data-update') {
                         updateUI(payload);
-                    } else if (type === 'system-status') {
-                        // --- NEW: Handle system status messages ---
-                        if (payload.online) {
-                            updateDeviceOnlineStatus(true);
-                            stopIdlePollTimer();
-                        } else {
-                            updateDeviceOnlineStatus(false, 'DEVICE');
-                            startIdlePollTimer(payload.idlePollRate);
-                        }
                     }
                 } catch (e) {
                     console.error("Failed to parse incoming socket message:", event.data, e);
+                    return; // Stop processing this malformed message
                 }
+
+                // Set a new timeout. If no message arrives in the next 15 seconds,
+                // the device will be marked as offline.
+                deviceDataTimeout = setTimeout(() => {
+                    console.warn(`Device data timeout! No data received for ${DEVICE_OFFLINE_THRESHOLD / 1000}s.`);
+                    updateDeviceOnlineStatus(false, 'DEVICE');
+                }, DEVICE_OFFLINE_THRESHOLD);
             };
         }
 
-        // --- NEW: Countdown Timer Logic ---
-        function startIdlePollTimer(durationMs) {
-            stopIdlePollTimer(); // Clear any existing timer first
-            const endTime = Date.now() + durationMs;
-            DOMElements.idlePollTimer.classList.add('show');
-
-            const updateTimer = () => {
-                const remainingMs = Math.max(0, endTime - Date.now());
-                const totalSeconds = Math.round(remainingMs / 1000);
-                const minutes = Math.floor(totalSeconds / 60);
-                const seconds = totalSeconds % 60;
-                DOMElements.idlePollTimer.textContent = `Next Check: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                
-                if (remainingMs <= 0) {
-                    DOMElements.idlePollTimer.textContent = 'Checking...';
-                    stopIdlePollTimer();
-                }
-            };
-            
-            updateTimer(); // Run once immediately
-            idlePollCountdownInterval = setInterval(updateTimer, 1000);
-        }
-
-        function stopIdlePollTimer() {
-            clearInterval(idlePollCountdownInterval);
-            idlePollCountdownInterval = null;
-            DOMElements.idlePollTimer.classList.remove('show');
-        }
-
+        // --- SAFETY & STATUS LOGIC ---
         function lockSystemSafety(title, subtitle) {
             document.body.classList.add('safety-lockdown');
             DOMElements.lockdownOverlayMessage.innerHTML = `${title}<small>${subtitle}</small>`;
         }
 
-        function unlockSystemSafety() {
-            document.body.classList.remove('safety-lockdown');
-        }
+        function unlockSystemSafety() { document.body.classList.remove('safety-lockdown'); }
 
         function updateDeviceOnlineStatus(isOnline, source = 'DEVICE') {
             if (isOnline) {
                 DOMElements.deviceStatus.textContent = 'ONLINE';
                 DOMElements.deviceStatus.className = 'device-status-indicator online';
                 DOMElements.flowCard.className = 'card online-device';
-                unlockSystemSafety();
             } else {
                 DOMElements.deviceStatus.textContent = 'OFFLINE';
                 DOMElements.deviceStatus.className = 'device-status-indicator offline';
@@ -267,13 +224,17 @@
                 DOMElements.flowRate.textContent = '--.--';
                 DOMElements.valveStatus.textContent = 'UNKNOWN';
                 DOMElements.valveStatus.className = 'status-value';
+                
+                // FIXED: Ensure control buttons are disabled when offline
                 DOMElements.openBtn.disabled = true;
                 DOMElements.closeBtn.disabled = true;
-                if (source === 'DEVICE') lockSystemSafety('🔌 DEVICE OFFLINE', 'The hardware has stopped sending data. Retrying periodically.');
+
+                if (source === 'DEVICE') lockSystemSafety('🔌 DEVICE OFFLINE', 'The hardware has stopped sending data.');
                 else if (source === 'SERVER') lockSystemSafety('🛡️ SERVER OFFLINE', 'Connection to the server was lost. Reconnecting...');
             }
         }
         
+        // --- UI UPDATE & ANIMATION LOGIC ---
         function animateValue(start, end, duration, updater) {
             if (Math.abs(start - end) < 0.01) { updater(end); return; }
             let startTime = null;
@@ -288,8 +249,6 @@
         }
 
         function updateUI(data) {
-            if (!Object.keys(data).length) return; // Don't update UI if data is empty
-
             if (data[VPIN.FLOW_RATE] !== undefined) {
                 const newFlowRate = parseFloat(data[VPIN.FLOW_RATE]);
                 animateValue(currentFlowRate, newFlowRate, 500, (val) => { DOMElements.flowRate.textContent = val.toFixed(2); });
@@ -333,6 +292,7 @@
             volumeChart.update();
         }
 
+        // --- API COMMANDS & NOTIFICATIONS ---
         async function updateBlynkPinValue(pin, value) {
             try {
                 const response = await fetch('/api/update-pin', {
@@ -362,6 +322,7 @@
             }, 3000);
         }
 
+        // --- NEW: Custom Confirmation Modal Logic ---
         function showConfirmation(title, body, onConfirm) {
             DOMElements.modalTitle.textContent = title;
             DOMElements.modalBody.textContent = body;
@@ -374,16 +335,20 @@
             confirmAction = null;
         }
 
+        // --- EVENT LISTENERS ---
         function setupEventListeners() {
             DOMElements.openBtn.addEventListener('click', () => {
                 showNotification('Sending OPEN command...', 'info');
-                updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1).catch(() => {});
+                updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1)
+                    .catch(() => showNotification('OPEN command failed.', 'error')); // FIXED: Error handling
             });
             DOMElements.closeBtn.addEventListener('click', () => {
                 showNotification('Sending CLOSE command...', 'info');
-                updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1).catch(() => {});
+                updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1)
+                    .catch(() => showNotification('CLOSE command failed.', 'error')); // FIXED: Error handling
             });
             DOMElements.resetVolumeBtn.addEventListener('click', () => {
+                // FIXED: Replaced window.confirm with custom modal
                 showConfirmation('Reset Volume?', 'Are you sure you want to reset the total volume? This cannot be undone.', () => {
                     showNotification('Resetting volume...', 'info');
                     updateBlynkPinValue(VPIN.CMD_RESET_VOLUME, 1);
@@ -398,13 +363,17 @@
                     .catch(err => showNotification('Failed to set limit', 'error'));
             });
 
+            // NEW: Event listeners for the custom modal
             DOMElements.modalCancelBtn.addEventListener('click', hideConfirmation);
             DOMElements.modalConfirmBtn.addEventListener('click', () => {
-                if (typeof confirmAction === 'function') confirmAction();
+                if (typeof confirmAction === 'function') {
+                    confirmAction();
+                }
                 hideConfirmation();
             });
         }
 
+        // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
             initializeGauge();
             setupEventListeners();

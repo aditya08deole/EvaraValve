@@ -14,15 +14,28 @@ const logger = {
 
 // --- CONFIGURATION ---
 const CONFIG = {
+    // Port to run the web server on. process.env.PORT is provided by hosting services like Render.
     PORT: process.env.PORT || 10000,
-    BLYNK_AUTH_TOKEN: process.env.BLYNK_AUTH_TOKEN || "1NJUV0rE2TjnZxbTb89-tA0XmwGwZGCn",
+    
+    // *** SECURITY UPDATE ***
+    // The Blynk token is now ONLY read from the environment variables.
+    // It is no longer hardcoded in this file.
+    BLYNK_AUTH_TOKEN: process.env.BLYNK_AUTH_TOKEN,
+
+    // Base URL for the Blynk API.
     BLYNK_API_BASE: 'https://blynk.cloud/external/api',
-    POLLING_RATE_ONLINE_MS: 1500,     // 1.5 seconds when device is online
-    POLLING_RATE_OFFLINE_MS: 15*60*1000,   // 15 min when device is offline
+    
+    // Polling rates for different device states.
+    POLLING_RATE_ONLINE_MS: 1500,       // 1.5 seconds when device is online
+    POLLING_RATE_OFFLINE_MS: 15 * 60 * 1000, // 15 minutes when device is offline
     POLLING_RATE_ACTIVE_CHECK_MS: 5000, // 5 seconds during manual reconnect attempt
-    ACTIVE_CHECK_DURATION_MS: 30000,  // Window for active check (30 seconds)
-    OFFLINE_GRACE_PERIOD_MS: 25000,    // Mark offline if no fresh data for 25 seconds
-    API_TIMEOUT_MS: 4000,             // Timeout for Blynk API calls
+    
+    // Timeouts and grace periods.
+    ACTIVE_CHECK_DURATION_MS: 30000,    // Window for active check (30 seconds)
+    OFFLINE_GRACE_PERIOD_MS: 25000,     // Mark offline if no fresh data for 25 seconds
+    API_TIMEOUT_MS: 4000,               // Timeout for Blynk API calls
+
+    // Virtual pins to monitor on the device.
     VIRTUAL_PINS_TO_POLL: ['v0', 'v1', 'v2', 'v3', 'v4', 'v5'],
 };
 
@@ -68,7 +81,7 @@ const BlynkService = {
      */
     async updatePin(pin, value) {
         const url = `${CONFIG.BLYNK_API_BASE}/update?token=${CONFIG.BLYNK_AUTH_TOKEN}&${pin}=${value}`;
-        const response = await fetch(url, { timeout: 5000 });
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`Blynk API returned status ${response.status} for update`);
         }
@@ -77,28 +90,18 @@ const BlynkService = {
 };
 
 // --- WEBSOCKET MANAGER ---
-let wss; // Will be initialized in main()
+let wss; 
 const WebSocketManager = {
-    /**
-     * Initializes the WebSocket server.
-     * @param {object} server The HTTP server instance.
-     */
     initialize(server) {
         wss = new WebSocketServer({ server });
         wss.on('connection', this.handleConnection);
         logger.success('WebSocket server initialized.');
     },
 
-    /**
-     * Handles new client connections, message listeners, and cleanup.
-     * @param {WebSocket} ws The WebSocket instance for the connected client.
-     * @param {object} req The initial HTTP request.
-     */
     handleConnection(ws, req) {
         const clientIp = req.socket.remoteAddress;
         logger.info(`Client connected from ${clientIp}. Total clients: ${wss.clients.size}`);
 
-        // Send the current state immediately on connection
         ws.send(JSON.stringify({
             type: 'initial-state',
             payload: state.deviceDataCache,
@@ -110,10 +113,6 @@ const WebSocketManager = {
         ws.on('error', (err) => logger.error(`WebSocket error from ${clientIp}: ${err.message}`));
     },
     
-    /**
-     * Handles incoming messages from clients.
-     * @param {string} message The raw message from the client.
-     */
     handleMessage(message) {
         try {
             const data = JSON.parse(message);
@@ -125,10 +124,6 @@ const WebSocketManager = {
         }
     },
     
-    /**
-     * Broadcasts a message to all connected WebSocket clients.
-     * @param {object} messageObject The data to be sent.
-     */
     broadcast(messageObject) {
         if (!wss) return;
         const message = JSON.stringify(messageObject);
@@ -143,19 +138,12 @@ const WebSocketManager = {
 
 // --- CORE POLLING LOGIC ---
 
-/**
- * Determines the delay for the next polling cycle based on the current state.
- * @returns {number} The polling interval in milliseconds.
- */
 function getNextPollRate() {
     if (state.isDeviceOnline) return CONFIG.POLLING_RATE_ONLINE_MS;
     if (state.isActivelyChecking) return CONFIG.POLLING_RATE_ACTIVE_CHECK_MS;
     return CONFIG.POLLING_RATE_OFFLINE_MS;
 }
 
-/**
- * The main polling loop that fetches data, updates state, and broadcasts to clients.
- */
 async function runPollingCycle() {
     clearTimeout(state.pollTimeoutId);
     let isDataFresh = false;
@@ -164,19 +152,17 @@ async function runPollingCycle() {
         const newData = await BlynkService.pollPinData();
         const currentUptime = parseInt(newData.v5) || 0;
 
-        // Uptime changed means the device is alive and sent new data
         if (currentUptime > 0 && currentUptime !== state.lastUptimeValue) {
             if (!state.isDeviceOnline) {
                 logger.success(`Device came ONLINE. (Uptime: ${currentUptime}s)`);
                 state.isDeviceOnline = true;
-                state.isActivelyChecking = false; // Stop active checking once online
+                state.isActivelyChecking = false; 
                 clearTimeout(state.activeCheckTimeoutId);
             }
             state.lastFreshDataTimestamp = Date.now();
             state.lastUptimeValue = currentUptime;
             isDataFresh = true;
         } else {
-            // If device was online but grace period has passed, mark it offline
             const timeSinceFreshData = Date.now() - state.lastFreshDataTimestamp;
             if (state.isDeviceOnline && timeSinceFreshData > CONFIG.OFFLINE_GRACE_PERIOD_MS) {
                 logger.warn('Device went OFFLINE. (Grace period expired)');
@@ -205,9 +191,6 @@ async function runPollingCycle() {
     }
 }
 
-/**
- * Initiates a temporary period of faster polling to check for device reconnection.
- */
 function triggerActiveCheck() {
     const now = Date.now();
     if (now < state.forcePollCooldownUntil) {
@@ -231,12 +214,11 @@ function triggerActiveCheck() {
 
 // --- MAIN APPLICATION ---
 
-/**
- * Initializes the Express server, routes, and starts the application.
- */
 function main() {
-    if (!CONFIG.BLYNK_AUTH_TOKEN || CONFIG.BLYNK_AUTH_TOKEN.includes("Your")) {
-        logger.error('CRITICAL: BLYNK_AUTH_TOKEN is not set in environment variables.');
+    // This safety check is now critical. It ensures the server will not start
+    // without the secret BLYNK_AUTH_TOKEN being provided via environment variables.
+    if (!CONFIG.BLYNK_AUTH_TOKEN) {
+        logger.error('CRITICAL: BLYNK_AUTH_TOKEN is not set in environment variables. Server shutting down.');
         process.exit(1);
     }
     
@@ -244,11 +226,9 @@ function main() {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
 
-    // --- Middleware & Static Files ---
     app.use(express.json());
     app.use(express.static(path.join(__dirname, 'public')));
 
-    // --- API Routes ---
     app.get('/', (req, res) => {
         res.sendFile(path.join(__dirname, 'public', 'index.html'));
     });
@@ -276,19 +256,18 @@ function main() {
         });
     });
 
-    // --- Server Startup ---
     const server = app.listen(CONFIG.PORT, '0.0.0.0', () => {
         console.log('\n╔══════════════════════════════════════╗');
-        console.log('║    EvaraTap Server v7.0 - Refactored   ║');
+        console.log('║     EvaraTap Server v1.0 - Started     ║');
         console.log('╚══════════════════════════════════════╝');
         logger.info(`Server running at http://localhost:${CONFIG.PORT}`);
-        logger.info(`Polling rates (Online/Offline/Check): ${CONFIG.POLLING_RATE_ONLINE_MS/1000}s / ${CONFIG.POLLING_RATE_OFFLINE_MS/1000}s / ${CONFIG.POLLING_RATE_ACTIVE_CHECK_MS/1000}s`);
+        // Log the offline poll rate in minutes for readability
+        logger.info(`Polling rates (Online/Offline/Check): ${CONFIG.POLLING_RATE_ONLINE_MS/1000}s / ${CONFIG.POLLING_RATE_OFFLINE_MS/60000}m / ${CONFIG.POLLING_RATE_ACTIVE_CHECK_MS/1000}s`);
         
         WebSocketManager.initialize(server);
         runPollingCycle(); // Start the main loop
     });
 
-    // --- Graceful Shutdown ---
     process.on('SIGTERM', () => {
         logger.warn('SIGTERM received. Shutting down gracefully...');
         clearTimeout(state.pollTimeoutId);

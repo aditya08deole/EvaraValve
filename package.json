@@ -1,7 +1,7 @@
 {
   "name": "evaratap-server",
-  "version": "1.0.0",
-  "description": "A robust Node.js backend for monitoring and controlling the EvaraTap IoT device.",
+  "version": "2.1.0",
+  "description": "Secure and robust backend for the EvaraTap IoT dashboard with improved error handling and heartbeat detection.",
   "main": "server.js",
   "type": "module",
   "scripts": {

@@ -12,4 +12,3 @@ services:
       - key: BLYNK_AUTH_TOKEN
         # This value MUST be set in your Render dashboard Environment 
         sync: false 
-

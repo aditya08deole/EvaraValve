@@ -45,14 +45,34 @@
         .btn-close { background: linear-gradient(to right, #e74c3c, #c0392b); color: white; }
         .btn:disabled { background: #95a5a6; cursor: not-allowed; opacity: 0.7; }
         .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 7px 10px rgba(0,0,0,0.2); }
-        .flow-display { text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; margin-bottom: 20px; }
-        .flow-value { font-size: 3rem; font-weight: bold; margin-bottom: 5px; }
+        .flow-display { position: relative; text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; margin-bottom: 20px; }
+        .flow-value { font-size: 3rem; font-weight: bold; margin-bottom: 5px; transition: opacity 0.4s ease; }
         .flow-unit { font-size: 1.2rem; opacity: 0.9; }
+
+        /* --- NEW: Style for stale data indicator --- */
+        .flow-display.stale-data .flow-value,
+        .gauge-text.stale-data .gauge-value {
+            opacity: 0.6;
+        }
+        .flow-display.stale-data::after {
+            content: 'Last Reading';
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            font-weight: 600;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 8px;
+            border-radius: 10px;
+            color: #fff;
+        }
+
         .gauge-wrapper { position: relative; width: 100%; margin: 0 auto 20px; }
         .gauge-container { position: relative; width: 100%; height: 180px; margin: 0 auto; }
         .gauge-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         .gauge-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .gauge-value { font-size: 2.5rem; font-weight: bold; color: var(--secondary-color); margin-bottom: 5px; }
+        .gauge-value { font-size: 2.5rem; font-weight: bold; color: var(--secondary-color); margin-bottom: 5px; transition: opacity 0.4s ease; }
         .gauge-label { font-size: 1.2rem; color: #7f8c8d; }
         .limit-config-panel { margin-top: 20px; background: var(--light-bg); border-radius: 12px; padding: 20px; border: 1px solid var(--border-color); }
         .config-header { font-size: 1rem; font-weight: 600; color: var(--secondary-color); margin-bottom: 15px; }
@@ -76,14 +96,14 @@
     </style>
 </head>
 <body>
-   
+    
     <div class="safety-lockdown-overlay">
         <div class="lockdown-message">
             🛡️ CONNECTING...
             <small>Establishing secure connection to the server.</small>
         </div>
     </div>
-   
+    
     <div class="modal-overlay" id="confirmationModal">
         <div class="modal-content">
             <h3 class="modal-title" id="modalTitle">Are you sure?</h3>
@@ -100,23 +120,23 @@
             <h1>🌊 EvaraTap Smart Flow Control</h1>
             <p>High-Performance IoT Water Management</p>
         </header>
-       
+        
         <div class="dashboard">
             <div class="card" id="flowCard">
                 <div class="device-status-indicator" id="deviceStatus">CONNECTING</div>
                 <h2 class="card-title">💧 Flow Control</h2>
-                <div class="flow-display"><div class="flow-value" id="flowRate">--.--</div><div class="flow-unit">L/min</div></div>
+                <div class="flow-display" id="flowDisplay"><div class="flow-value" id="flowRate">--.--</div><div class="flow-unit">L/min</div></div>
                 <div class="status-item"><span class="status-label">Valve Status</span><span class="status-value" id="valveStatus">UNKNOWN</span></div>
                 <div class="status-item"><span class="status-label">System Uptime</span><span class="status-value" id="uptimeDisplay">--:--:--</span></div>
                 <div class="controls"><button class="btn btn-open" id="openBtn">OPEN VALVE</button><button class="btn btn-close" id="closeBtn">CLOSE VALVE</button></div>
             </div>
-           
+            
             <div class="card">
                 <h2 class="card-title">📊 Volume Analytics</h2>
                 <div class="gauge-wrapper">
                     <div class="gauge-container">
                         <canvas id="volumeGauge" class="gauge-canvas"></canvas>
-                        <div class="gauge-text"><div class="gauge-value" id="totalVolumeDisplay">--.- L</div><div class="gauge-label">Total Volume</div></div>
+                        <div class="gauge-text" id="gaugeText"><div class="gauge-value" id="totalVolumeDisplay">--.- L</div><div class="gauge-label">Total Volume</div></div>
                     </div>
                 </div>
                 <div class="status-item"><span class="status-label">Volume Limit</span><span class="status-value" id="volumeLimitDisplay">--.-- L</span></div>
@@ -133,13 +153,27 @@
         const VPIN = { TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2', VOLUME_LIMIT: 'v4', ONLINE_STATUS: 'v5', CMD_OPEN_VALVE: 'v10', CMD_CLOSE_VALVE: 'v11', CMD_RESET_VOLUME: 'v12', CMD_SET_LIMIT: 'v13' };
 
         const DOMElements = {
-            deviceStatus: document.getElementById('deviceStatus'), flowRate: document.getElementById('flowRate'), valveStatus: document.getElementById('valveStatus'),
-            totalVolumeDisplay: document.getElementById('totalVolumeDisplay'), volumeLimitDisplay: document.getElementById('volumeLimitDisplay'),
-            volumeLimitInput: document.getElementById('volumeLimitInput'), openBtn: document.getElementById('openBtn'), closeBtn: document.getElementById('closeBtn'),
-            setLimitBtn: document.getElementById('setLimitBtn'), resetVolumeBtn: document.getElementById('resetVolumeBtn'), flowCard: document.getElementById('flowCard'),
-            lockdownOverlayMessage: document.querySelector('.lockdown-message'), confirmationModal: document.getElementById('confirmationModal'),
-            modalTitle: document.getElementById('modalTitle'), modalBody: document.getElementById('modalBody'), modalConfirmBtn: document.getElementById('modalConfirmBtn'),
-            modalCancelBtn: document.getElementById('modalCancelBtn'), uptimeDisplay: document.getElementById('uptimeDisplay')
+            deviceStatus: document.getElementById('deviceStatus'), 
+            flowRate: document.getElementById('flowRate'), 
+            valveStatus: document.getElementById('valveStatus'),
+            totalVolumeDisplay: document.getElementById('totalVolumeDisplay'), 
+            volumeLimitDisplay: document.getElementById('volumeLimitDisplay'),
+            volumeLimitInput: document.getElementById('volumeLimitInput'), 
+            openBtn: document.getElementById('openBtn'), 
+            closeBtn: document.getElementById('closeBtn'),
+            setLimitBtn: document.getElementById('setLimitBtn'), 
+            resetVolumeBtn: document.getElementById('resetVolumeBtn'), 
+            flowCard: document.getElementById('flowCard'),
+            lockdownOverlayMessage: document.querySelector('.lockdown-message'), 
+            confirmationModal: document.getElementById('confirmationModal'),
+            modalTitle: document.getElementById('modalTitle'), 
+            modalBody: document.getElementById('modalBody'), 
+            modalConfirmBtn: document.getElementById('modalConfirmBtn'),
+            modalCancelBtn: document.getElementById('modalCancelBtn'), 
+            uptimeDisplay: document.getElementById('uptimeDisplay'),
+            // --- NEW: Added references for stale data styling ---
+            flowDisplay: document.getElementById('flowDisplay'),
+            gaugeText: document.getElementById('gaugeText')
         };
 
         let socket, reconnectInterval = 1000, volumeChart = null, currentFlowRate = 0, currentTotalVolume = 0;
@@ -172,11 +206,13 @@
             socket.onmessage = (event) => {
                 try {
                     const message = JSON.parse(event.data);
-                    const { type, payload, isOnline } = message;
+                    // --- CHANGED: Now extracting `isFresh` from the message ---
+                    const { type, payload, isOnline, isFresh } = message;
                     
                     if (type === 'initial-state' || type === 'data-update') {
-                        updateDeviceOnlineStatus(isOnline !== undefined ? isOnline : true);
-                        updateUI(payload);
+                        updateDeviceOnlineStatus(isOnline !== undefined ? isOnline : false);
+                        // --- CHANGED: Pass `isFresh` to the UI update function ---
+                        updateUI(payload, isFresh !== undefined ? isFresh : false);
                     }
                 } catch (e) {
                     console.error("Parse error:", e);
@@ -226,13 +262,27 @@
         }
 
         function formatUptime(seconds) {
+            if (isNaN(seconds) || seconds < 0) return '--:--:--';
             const hours = Math.floor(seconds / 3600);
             const minutes = Math.floor((seconds % 3600) / 60);
             const secs = seconds % 60;
             return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
         }
 
-        function updateUI(data) {
+        // --- CHANGED: `updateUI` now accepts the `isFresh` flag ---
+        function updateUI(data, isFresh) {
+            // --- NEW: Logic to handle stale data display ---
+            if (isFresh) {
+                // If data is fresh, remove stale indicators
+                DOMElements.flowDisplay.classList.remove('stale-data');
+                DOMElements.gaugeText.classList.remove('stale-data');
+            } else {
+                // If data is not fresh, it means we are in the server's grace period.
+                // The flow/volume data is the last known value, so we mark it as stale.
+                DOMElements.flowDisplay.classList.add('stale-data');
+                DOMElements.gaugeText.classList.add('stale-data');
+            }
+
             if (data[VPIN.FLOW_RATE] !== undefined) {
                 const newFlowRate = parseFloat(data[VPIN.FLOW_RATE]);
                 animateValue(currentFlowRate, newFlowRate, 500, (val) => { DOMElements.flowRate.textContent = val.toFixed(2); });
@@ -294,7 +344,7 @@
                 throw error;
             }
         }
-       
+        
         function showNotification(message, type = 'info') {
             const existing = document.querySelector('.notification');
             if (existing) existing.remove();

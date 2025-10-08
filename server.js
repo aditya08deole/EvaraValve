@@ -30,7 +30,7 @@ const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- Configuration ---
 const POLLING_RATE_ONLINE_MS = 1500;       // 1.5 seconds when device is online
-const POLLING_RATE_OFFLINE_MS = 15000;     // 15 seconds for background offline polling
+const POLLING_RATE_OFFLINE_MS = 15*60*1000;     // 15 seconds for background offline polling
 const POLLING_RATE_ACTIVE_CHECK_MS = 5000; // 5 seconds during a manual reconnect attempt
 const ACTIVE_CHECK_DURATION_MS = 30000;    // 30 seconds for the active check window
 const OFFLINE_GRACE_PERIOD_MS = 6000;      // Mark offline if no fresh data for 6 seconds

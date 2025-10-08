@@ -22,7 +22,7 @@ const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // Smart Polling Configuration
 const POLLING_RATE_ONLINE = 5000;        // 5 seconds when device is online
-const POLLING_RATE_OFFLINE = 15 * 60 * 1000;  // 15 minutes when device is offline
+const POLLING_RATE_OFFLINE = 2 * 60 * 1000;  // 15 minutes when device is offline
 const STALE_UPTIME_GRACE_POLLS = 3;      // Allow 3 stale polls before marking offline
 const STALE_TIMESTAMP_THRESHOLD = 20000;  // 20 seconds since last fresh data
 

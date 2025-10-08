@@ -1,16 +1,16 @@
 {
-  "name": "evaratap-blynk-proxy",
+  "name": "evaratap-server",
   "version": "1.0.0",
-  "description": "Secure IoT Flow Control System with a Blynk Backend Proxy",
+  "description": "A robust Node.js backend for monitoring and controlling the EvaraTap IoT device.",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "express": "^4.19.2",
     "node-fetch": "^3.3.2",
-    "ws": "^8.14.2"
+    "ws": "^8.17.0"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -18,10 +18,10 @@
   "keywords": [
     "iot",
     "esp32",
-    "flow-control",
-    "secure",
     "blynk",
-    "proxy"
+    "node",
+    "dashboard",
+    "EvaraTap"
   ],
   "author": "aditya08deole",
   "license": "MIT"

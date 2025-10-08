@@ -1,14 +1,26 @@
+# render.yaml
+# This file provides explicit instructions to Render for building and deploying your service.
+
 services:
-  - type: web
-    name: evaratap-blynk-dashboard
-    runtime: node
-    plan: free
-    # The build command explicitly uses npm. The --force flag helps resolve conflicts.
-    buildCommand: "npm install --force" 
+  - type: web          # This is a web service that can receive HTTP traffic.
+    name: evaratap-server # A clear name for your service in the Render dashboard.
+    runtime: node      # Specifies the environment (Node.js).
+    plan: free         # Specifies the instance type.
+    branch: main       # The Git branch to deploy from.
+    
+    # The command to install dependencies. This forces Render to use npm.
+    buildCommand: "npm install"
+    
+    # The command to run your server after a successful build.
     startCommand: "npm start"
+    
+    # Environment variables for your application.
     envVars:
       - key: NODE_ENV
-        value: production
+        value: production  # Tells Node.js to run in production mode.
+      - key: NODE_VERSION
+        value: 20.11.1     # Pins a specific, stable version of Node.js.
       - key: BLYNK_AUTH_TOKEN
-        # This value MUST be set in your Render dashboard Environment 
-        sync: false 
+        # This securely links the variable in your code to the secret you create in the dashboard.
+        # IMPORTANT: The value is stored securely in the Render Dashboard, NOT here.
+        fromSecret: BLYNK_AUTH_TOKEN_SECRET

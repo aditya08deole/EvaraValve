@@ -1,14 +1,3 @@
-/************************************************************************
- * EvaraTap Server v7.0 - Professional Refactor
- *
- * A robust Node.js backend for monitoring a Blynk IoT device.
- * Features intelligent polling, WebSocket-based real-time updates for
- * a web dashboard, and an API for sending commands to the device.
- *
- * @author Gemini AI (Refactored for Professional Structure)
- * @version 7.0
- ************************************************************************/
-
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';

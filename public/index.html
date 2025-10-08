@@ -38,22 +38,27 @@
         .status-value { font-weight: 700; }
         .status-value.open { color: var(--success-color); }
         .status-value.closed { color: var(--danger-color); }
+        
+        /* --- UPDATED OVERLAY STYLES --- */
         .safety-lockdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(44, 62, 80, 0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; align-items: center; justify-content: center; text-align: center; color: white; flex-direction: column; transition: opacity 0.3s ease; opacity: 0; pointer-events: none; }
         body.safety-lockdown .safety-lockdown-overlay { opacity: 1; pointer-events: auto; }
         .lockdown-message { font-size: 1.5rem; font-weight: bold; }
         .lockdown-message small { font-size: 1rem; font-weight: 400; color: #bdc3c7; margin-top: 10px; display: block; }
-        body.safety-lockdown .btn, body.safety-lockdown .limit-set-btn { cursor: not-allowed; filter: grayscale(80%); pointer-events: none; }
+        
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .btn { padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .btn-open { background: linear-gradient(to right, #2ecc71, #27ae60); color: white; }
         .btn-close { background: linear-gradient(to right, #e74c3c, #c0392b); color: white; }
         .btn:disabled, .btn-reconnect:disabled { background: #95a5a6; cursor: not-allowed; opacity: 0.7; transform: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .btn:hover:not(:disabled), .btn-reconnect:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 7px 10px rgba(0,0,0,0.2); }
-        .reconnect-panel { margin-top: 15px; margin-bottom: 15px; padding: 15px; background: rgba(243, 156, 18, 0.1); border: 2px dashed var(--warning-color); border-radius: 10px; text-align: center; display: none; }
-        .reconnect-panel.visible { display: block; animation: slideDown 0.4s ease-out; }
-        @keyframes slideDown { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* --- UPDATED RECONNECT PANEL STYLES --- */
+        .reconnect-panel { margin-top: 25px; padding: 15px; width: 90%; max-width: 400px; text-align: center; display: none; }
+        .reconnect-panel.visible { display: block; animation: fadeIn 0.5s 0.2s ease forwards; opacity: 0; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .btn-reconnect { background: linear-gradient(to right, #f39c12, #e67e22); color: white; width: 100%; padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .reconnect-status { font-size: 0.9rem; color: var(--secondary-color); margin-top: 10px; font-weight: 500; min-height: 20px; }
+        .reconnect-status { font-size: 1rem; color: #f1c40f; margin-top: 15px; font-weight: 500; min-height: 20px; }
+
         .flow-display { text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; margin-bottom: 20px; }
         .flow-value { font-size: 3rem; font-weight: bold; margin-bottom: 5px; }
         .flow-unit { font-size: 1.2rem; opacity: 0.9; }
@@ -87,9 +92,15 @@
 <body>
     
     <div class="safety-lockdown-overlay">
-        <div class="lockdown-message">
-            🛡️ CONNECTING...
-            <small>Establishing secure connection to the server.</small>
+        <div> <div class="lockdown-message">
+                🛡️ CONNECTING...
+                <small>Establishing secure connection to the server.</small>
+            </div>
+            
+            <div class="reconnect-panel" id="reconnectPanel">
+                <button class="btn-reconnect" id="reconnectBtn">🔄 TRY RECONNECTING</button>
+                <div class="reconnect-status" id="reconnectStatus"></div>
+            </div>
         </div>
     </div>
     
@@ -116,11 +127,6 @@
                 <h2 class="card-title">💧 Flow Control</h2>
                 <div class="flow-display"><div class="flow-value" id="flowRate">--.--</div><div class="flow-unit">L/min</div></div>
                 <div class="status-item"><span class="status-label">Valve Status</span><span class="status-value" id="valveStatus">UNKNOWN</span></div>
-                
-                <div class="reconnect-panel" id="reconnectPanel">
-                    <button class="btn-reconnect" id="reconnectBtn">🔄 TRY RECONNECTING</button>
-                    <div class="reconnect-status" id="reconnectStatus"></div>
-                </div>
                 
                 <div class="controls"><button class="btn btn-open" id="openBtn">OPEN VALVE</button><button class="btn btn-close" id="closeBtn">CLOSE VALVE</button></div>
             </div>
@@ -191,7 +197,7 @@
                             updateUI(payload.data || {});
                             updateDeviceOnlineStatus(payload.online);
                             if (payload.isReconnecting) {
-                                updateReconnectUI('reconnecting', 0, 5); // Assume 5 attempts
+                                updateReconnectUI('reconnecting', 0, 5);
                             }
                             break;
                         case 'data-update':
@@ -228,14 +234,14 @@
                 DOMElements.deviceStatus.textContent = 'ONLINE';
                 DOMElements.deviceStatus.className = 'device-status-indicator online';
                 DOMElements.flowCard.className = 'card online-device';
-                DOMElements.reconnectPanel.classList.remove('visible');
+                DOMElements.reconnectPanel.classList.remove('visible'); // Hide panel
                 unlockSystemSafety();
             } else {
                 DOMElements.deviceStatus.textContent = 'OFFLINE';
                 DOMElements.deviceStatus.className = 'device-status-indicator offline';
                 DOMElements.flowCard.className = 'card offline-device';
-                DOMElements.reconnectPanel.classList.add('visible');
-                lockSystemSafety('🔌 DEVICE OFFLINE', 'Hardware not responding. Use the reconnect button to try again.');
+                DOMElements.reconnectPanel.classList.add('visible'); // Show panel
+                lockSystemSafety('🔌 DEVICE OFFLINE', 'Hardware not responding.');
                 updateUI({ [VPIN.FLOW_RATE]: 0, [VPIN.VALVE_STATUS]: 0 });
             }
         }
@@ -246,7 +252,7 @@
                     isReconnecting = true;
                     DOMElements.deviceStatus.textContent = 'RECONNECTING';
                     DOMElements.deviceStatus.className = 'device-status-indicator reconnecting';
-                    DOMElements.reconnectStatus.textContent = `🔄 Attempting... (${currentAttempt}/${totalAttempts})`;
+                    DOMElements.reconnectStatus.textContent = `Attempting... (${currentAttempt}/${totalAttempts})`;
                     break;
                 case 'success':
                     isReconnecting = false;
@@ -269,10 +275,10 @@
                 const response = await fetch('/api/reconnect', { method: 'POST' });
                 const data = await response.json();
                 
-                if (response.status === 429) { // Cooldown active
+                if (response.status === 429) {
                     showNotification(`Please wait ${data.remainingSeconds}s`, 'warning');
                     startReconnectCooldown(data.remainingSeconds);
-                } else if (response.status === 202) { // Reconnect started
+                } else if (response.status === 202) {
                     startReconnectCooldown(10);
                 } else if (!response.ok) {
                    throw new Error(data.error || 'Unknown error');

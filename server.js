@@ -23,7 +23,7 @@ const BLYNK_AUTH_TOKEN = process.env.BLYNK_AUTH_TOKEN;
 const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- Smart Polling Configuration ---
-const POLLING_RATE_ACTIVE_MS = 1500;      // Poll every 1.5 seconds when device is ONLINE
+const POLLING_RATE_ACTIVE_MS = 2000;      // Poll every 2 seconds when device is ONLINE
 const POLLING_RATE_IDLE_MS = 1.5*60000;       // Poll every 1.5*60 seconds when device is OFFLINE
 const STALE_DATA_THRESHOLD_MS = 15000;    // Consider data stale after 15 seconds of no uptime change
 
@@ -84,7 +84,7 @@ const pollBlynkData = async () => {
             consecutiveStalePolls++;
             
             // Only mark offline after 3 consecutive stale polls
-            if (consecutiveStalePolls >= 3) {
+            if (consecutiveStalePolls >= 6) {
                 if (isDeviceOnline) {
                     console.warn('⚠️  Stale data detected. ESP32 appears to be OFFLINE.');
                     console.log('🐌 Switching to Idle Mode (polling every 60 seconds).');
@@ -101,7 +101,7 @@ const pollBlynkData = async () => {
             
             if (!isDeviceOnline) {
                 console.info('✅ Fresh data detected! ESP32 is back ONLINE.');
-                console.log('🚀 Switching to Active Mode (polling every 5 seconds).');
+                console.log(`🚀 Switching to Active Mode (polling every ${POLLING_RATE_ACTIVE_MS / 1000} seconds).`);
             }
             
             isDeviceOnline = true;

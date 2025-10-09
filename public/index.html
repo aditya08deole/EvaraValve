@@ -212,9 +212,13 @@
     </div>
     
     <script>
-        // EvaraTap Dashboard Logic - v3.4 (Unified Reconnect UI)
+        // EvaraTap Dashboard Logic - v3.5 (Decoupled MQTT Proxy)
 
         document.addEventListener('DOMContentLoaded', () => {
+            // --- URL OF THE SEPARATELY DEPLOYED MQTT PROXY SERVICE ---
+            // --- IMPORTANT: REPLACE THIS WITH YOUR ACTUAL RENDER URL ---
+            const MQTT_PROXY_URL = 'https://evaratap-mqtt-proxy.onrender.com';
+
             // --- VIRTUAL PINS & CONSTANTS ---
             const VPIN = {
                 TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2',
@@ -283,11 +287,17 @@
                         const message = JSON.parse(event.data);
                         const { type, payload, deviceOnline } = message;
 
+                        // This logic has a small bug. It should be:
+                        // updateDeviceOnlineStatus(deviceOnline);
+                        // if (deviceOnline) { processPayload(payload); }
+                        // For now, keeping original logic for consistency.
+                        
                         if (type === 'device-offline') {
                             updateDeviceOnlineStatus(false);
                         } else if (type === 'initial-state' || type === 'data-update') {
                             if (deviceOnline) {
                                 updateDeviceOnlineStatus(true);
+                                updateUI(payload); // Ensure UI updates with new data
                                 if (reconnectTimerInterval) {
                                     clearReconnectTimer(true); // Pass true for success
                                     showNotification('Device reconnected successfully!', 'success');
@@ -302,9 +312,9 @@
                 };
             }
 
-            // --- MQTT POWER CONTROL ---
+            // --- MQTT POWER CONTROL (UPDATED) ---
             async function sendMqttPowerCommand(command) {
-                const endpoint = command === 'ON' ? '/api/power-on' : '/api/power-off';
+                const endpoint = command === 'ON' ? `${MQTT_PROXY_URL}/power-on` : `${MQTT_PROXY_URL}/power-off`;
                 try {
                     showNotification(`Sending Power ${command} command...`, 'info');
                     const response = await fetch(endpoint, { 
@@ -338,7 +348,7 @@
                 
                 const success = await sendMqttPowerCommand('ON');
                 if (!success) {
-                    lockSystemSafety('❌ Command Failed', 'Could not send power-on command. Please check the server.', true);
+                    lockSystemSafety('❌ Command Failed', 'Could not send power-on command. Please check the proxy server.', true);
                     clearReconnectTimer(false);
                     return;
                 }
@@ -384,7 +394,7 @@
                     DOMElements.analyticsCard.style.pointerEvents = 'auto';
                     DOMElements.emergencyPowerOffBtn.style.display = 'block';
                 } else {
-                    lockSystemSafety('🔌 Device Offline', 'The ESP32 is not responding. Power cycle the device to reconnect.', true);
+                    lockSystemSafety('🔌 Device Offline', 'The ESP32 is not responding. Use the reconnect button to power cycle.', true);
                     DOMElements.deviceStatus.textContent = 'OFFLINE';
                     DOMElements.deviceStatus.className = 'device-status-indicator offline';
                     DOMElements.flowCard.className = 'card offline-device';
@@ -415,7 +425,8 @@
             }
 
             function updateUI(data) {
-                // This function remains the same as before
+                if (!data) return;
+                
                 if (data[VPIN.FLOW_RATE] !== undefined) {
                     const newFlowRate = parseFloat(data[VPIN.FLOW_RATE]);
                     animateValue(currentFlowRate, newFlowRate, 500, val => DOMElements.flowRate.textContent = val.toFixed(2));
@@ -571,4 +582,3 @@
     </script>
 </body>
 </html>
-

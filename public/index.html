@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvaraTap Smart Flow Control v5.1</title>
+    <title>EvaraTap Smart Flow Control v5.2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* EvaraTap Dashboard Styles - v5.1 (Video Background Update) */
+        /* EvaraTap Dashboard Styles - v5.2 (UI Polish) */
         :root {
             --primary-color: #00c6ff; --secondary-color: #f0f8ff;
             --success-color: #2ecc71; --danger-color: #e74c3c;
@@ -64,10 +64,11 @@
         .btn:disabled { background: #576574; cursor: not-allowed; opacity: 0.6; }
         .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 7px 10px rgba(0,0,0,0.3); }
 
-        /* --- Glassmorphism Dashboard & Cards --- */
+        /* --- Glassmorphism Dashboard & Cards (UPDATED) --- */
         .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
         .card { 
-            background: rgba(255, 255, 255, 0.1);
+            /* UPDATED: Increased the alpha for slightly better readability */
+            background: rgba(255, 255, 255, 0.15);
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
             border-radius: 20px; 
@@ -150,10 +151,14 @@
     </style>
 </head>
 <body>
-    <!-- NEW: Video Background Element -->
+    <!-- 
+        VIDEO BACKGROUND INSTRUCTIONS:
+        1. Place your video file (e.g., "ocean-background.mp4") inside the same 'public' folder as this index.html file.
+        2. The 'src' path below ("./ocean-background.mp4") tells the browser to look for the video in the current directory.
+        3. If you place the video in a subfolder (e.g., 'public/videos/'), you would change the path to "./videos/ocean-background.mp4".
+    -->
     <video autoplay muted loop playsinline id="bg-video">
-        <!-- This is a royalty-free video from Pixabay -->
-        <source src="https://cdn.pixabay.com/video/2020/09/17/51515-459530436.mp4" type="video/mp4">
+        <source src="./ocean-background.mp4" type="video/mp4">
         Your browser does not support the video tag.
     </video>
 
@@ -172,8 +177,6 @@
             ⚡ Connect to Device
         </button>
     </div>
-
-    <!-- Modals are removed for brevity in this example but would be styled similarly -->
 
     <div class="container">
         <header>
@@ -237,10 +240,9 @@
     </div>
     
     <script>
-        // EvaraTap Dashboard Logic - v5.1 (No logic changes)
+        // EvaraTap Dashboard Logic - v5.2 (No logic changes)
         document.addEventListener('DOMContentLoaded', () => {
 
-            // --- VIRTUAL PINS & CONSTANTS ---
             const VPIN = {
                 TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2',
                 VOLUME_LIMIT: 'v4', CMD_POWER_RELAY: 'v6',
@@ -418,8 +420,9 @@
                         plugins: { legend: { display: false }, tooltip: { enabled: false } }, 
                         maintainAspectRatio: false, 
                         animation: { 
-                            duration: 1200, 
-                            easing: 'easeInOutCubic'
+                            // UPDATED: More dynamic animation
+                            duration: 1500, 
+                            easing: 'easeOutElastic'
                         } 
                     }
                 });

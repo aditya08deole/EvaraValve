@@ -25,8 +25,8 @@ const BLYNK_AUTH_TOKEN = process.env.BLYNK_AUTH_TOKEN;
 const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- On-Demand Polling Configuration ---
-const POLLING_RATE_MS = 5000;         // Poll every 5 seconds ONLY when active
-const STALE_POLL_THRESHOLD = 3;       // Mark device offline after 3 consecutive stale polls (15 seconds)
+const POLLING_RATE_MS = 2000;         // Poll every 5 seconds ONLY when active
+const STALE_POLL_THRESHOLD = 6;       // Mark device offline after 3 consecutive stale polls (15 seconds)
 
 // Define all virtual pins your dashboard needs to monitor
 const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v4', 'v5', 'v6'];

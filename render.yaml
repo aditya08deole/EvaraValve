@@ -1,26 +1,44 @@
-# render.yaml
-# This file is verified to work with your EvaraTap Server v2.1
+# EvaraTap v3.0 - Dual Service Blueprint for Render
+#
+# This blueprint defines the infrastructure for the EvaraTap application on Render.
+# It consists of two distinct web services:
+# 1. Main Server: The primary backend that handles Blynk data polling and serves the main dashboard.
+# 2. MQTT Proxy: A lightweight, dedicated server for handling real-time MQTT commands.
+#
+# Both services are configured to deploy from the 'main' branch and utilize a shared
+# secret group for credentials.
 
 services:
+  # Service 1: The main server for Blynk polling and serving the user dashboard.
   - type: web
-    name: evaratap-server
+    name: evaratap-blynk-server
     runtime: node
-    plan: free
+    plan: free # Note: Free instances may spin down after periods of inactivity.
+    region: oregon # Specify a region for consistent deployment performance.
     branch: main
-    
-    # This command installs the dependencies from your package.json file.
-    buildCommand: "npm install"
-    
-    # This command runs the "start" script defined in your package.json.
-    startCommand: "npm start"
-    
-    # Defines the environment variables your server will have access to.
+    healthCheckPath: /health
+    buildCommand: "npm install" # Installs dependencies. Add '&& npm run build' if you have a build step.
+    startCommand: "npm run start:blynk"
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
-        value: 20.11.1
-      - key: BLYNK_AUTH_TOKEN
-        # This securely injects your secret token into the application.
-        # It links to the secret variable you create in the Render Environment tab.
-        fromSecret: BLYNK_AUTH_TOKEN_SECRET
+        value: "20.11.1" # Quoting the version ensures it's treated as a string.
+      - fromSecretGroup: evaratap-credentials
+
+  # Service 2: A lightweight proxy dedicated to handling MQTT commands.
+  - type: web
+    name: evaratap-mqtt-proxy
+    runtime: node
+    plan: free
+    region: oregon # It's good practice to keep services in the same region.
+    branch: main
+    healthCheckPath: /health
+    buildCommand: "npm install"
+    startCommand: "npm run start:mqtt"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20.11.1"
+      - fromSecretGroup: evaratap-credentials

@@ -1,16 +1,3 @@
-/**
- * EvaraTap Secure Backend for Blynk on Render - v4.0
- *
- * ARCHITECTURAL REVISION:
- * 1. Removed all external MQTT dependencies for power control.
- * 2. Integrated power control via Blynk Virtual Pin V6.
- * 3. Replaced the "always-on" dual-mode polling with a more efficient,
- * on-demand, single-mode polling system. Polling is now only active
- * when initiated by a user and automatically stops on disconnect.
- * 4. Added a new endpoint to initiate the connection and polling sequence.
- * 5. Enhanced error handling and state management for a more robust system.
- */
-
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,7 +12,7 @@ const BLYNK_AUTH_TOKEN = process.env.BLYNK_AUTH_TOKEN;
 const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- On-Demand Polling Configuration ---
-const POLLING_RATE_MS = 2000;         // Poll every 5 seconds ONLY when active
+const POLLING_RATE_MS = 2500;         // Poll every 5 seconds ONLY when active
 const STALE_POLL_THRESHOLD = 6;       // Mark device offline after 3 consecutive stale polls (15 seconds)
 
 // Define all virtual pins your dashboard needs to monitor

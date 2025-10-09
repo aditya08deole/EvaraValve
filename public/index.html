@@ -3,30 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvaraTap Smart Flow Control</title>
+    <title>EvaraTap Smart Flow Control v4</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* EvaraTap Dashboard Styles - v3.2 */
+        /* EvaraTap Dashboard Styles - v4.0 */
         :root {
             --primary-color: #3498db; --secondary-color: #2c3e50;
             --success-color: #2ecc71; --danger-color: #e74c3c;
             --warning-color: #f39c12; --light-bg: #f8f9fa; --border-color: #e9ecef;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d); color: #333; min-height: 100vh; padding: 20px; }
+        
+        /* New Animated Gradient Background */
+        body {
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+            background: linear-gradient(135deg, #5efce8, #736efe, #62cff4, #2c67f2, #0047ab, #1ca9c9);
+            background-size: 600% 600%;
+            animation: gradientAnimation 25s ease infinite;
+        }
+
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
         .container { max-width: 1200px; margin: 0 auto; }
         header { text-align: center; margin-bottom: 30px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
         h1 { font-size: 2.5rem; margin-bottom: 10px; }
 
         /* --- Buttons & Controls --- */
-        .emergency-power-off {
-            position: fixed; top: 20px; left: 20px; z-index: 1003;
+        .emergency-stop-btn {
             background: linear-gradient(135deg, #e74c3c, #c03b2b); color: white; border: none;
-            padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer;
+            padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;
             box-shadow: 0 4px 10px rgba(231, 76, 60, 0.4); transition: all 0.3s ease;
+            display: none; /* Initially hidden */
+            align-items: center; gap: 8px;
         }
-        .emergency-power-off:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(231, 76, 60, 0.6); }
-        .emergency-power-off:active { transform: scale(0.95); }
+        .emergency-stop-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(231, 76, 60, 0.6); }
+        .emergency-stop-btn:active { transform: scale(0.95); }
 
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .btn { padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -63,7 +80,7 @@
         @keyframes fadeInOut { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
         .offline-title { font-size: 2.2rem; font-weight: bold; margin-bottom: 15px; }
         .offline-message { font-size: 1.1rem; margin-bottom: 35px; color: #bdc3c7; line-height: 1.6; }
-       
+        
         /* --- Data Displays --- */
         .flow-display { text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; margin-bottom: 20px; }
         .flow-value { font-size: 3rem; font-weight: bold; margin-bottom: 5px; }
@@ -101,15 +118,15 @@
         body.safety-lockdown .safety-lockdown-overlay { opacity: 1; pointer-events: auto; }
         .lockdown-message small { font-size: 1rem; font-weight: 400; color: #bdc3c7; margin-top: 10px; display: block; }
 
-        .btn-reconnect {
+        .btn-connect {
             background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; border: none;
             padding: 16px 45px; font-size: 1.2rem; font-weight: bold; border-radius: 50px;
             cursor: pointer; box-shadow: 0 6px 15px rgba(46, 204, 113, 0.4); transition: all 0.3s ease;
             display: inline-flex; align-items: center; gap: 10px; margin-top: 20px;
         }
-        .btn-reconnect:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(46, 204, 113, 0.6); }
-        .btn-reconnect:disabled { background: #95a5a6; cursor: not-allowed; opacity: 0.7; }
-        .reconnect-timer { font-size: 1.3rem; margin-top: 25px; color: var(--warning-color); font-weight: 600; }
+        .btn-connect:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(46, 204, 113, 0.6); }
+        .btn-connect:disabled { background: #95a5a6; cursor: not-allowed; opacity: 0.7; }
+        .connection-timer { font-size: 1.3rem; margin-top: 25px; color: var(--warning-color); font-weight: 600; }
         
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1001; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
@@ -124,18 +141,14 @@
     </style>
 </head>
 <body>
-    <button class="emergency-power-off" id="emergencyPowerOffBtn" style="display: none;">
-        ⚡ EMERGENCY POWER OFF
-    </button>
-    
     <div class="safety-lockdown-overlay">
         <div class="lockdown-message">
-            🛡️ CONNECTING...<small>Establishing secure connection to the server.</small>
+             🛡️ System Offline<small>Press the button below to power on and connect to the device.</small>
         </div>
-        <button class="btn-reconnect" id="btnReconnect" style="display: none;">
-            🔄 Try Reconnecting
+        <button class="btn-connect" id="btnConnect">
+            ⚡ Connect to Device
         </button>
-        <div class="reconnect-timer" id="reconnectTimer"></div>
+        <div class="connection-timer" id="connectionTimer"></div>
     </div>
 
     <div class="modal-overlay" id="confirmationModal">
@@ -162,12 +175,20 @@
                     <div class="offline-title">Device Offline</div>
                     <div class="offline-message">
                         The ESP32 device is not responding.<br>
-                        Please use the reconnect option on the main screen.
+                        Please use the main connect button to re-establish a connection.
                     </div>
                 </div>
                 
-                <div class="device-status-indicator connecting" id="deviceStatus">CONNECTING</div>
-                <h2 class="card-title">💧 Flow Control</h2>
+                <div class="device-status-indicator offline" id="deviceStatus">OFFLINE</div>
+                <h2 class="card-title">
+                    💧 Flow Control
+                    <button class="emergency-stop-btn" id="emergencyStopBtn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.032z"/>
+                        </svg>
+                        EMERGENCY STOP
+                    </button>
+                </h2>
                 <div class="flow-display">
                     <div class="flow-value" id="flowRate">--.--</div>
                     <div class="flow-unit">L/min</div>
@@ -212,17 +233,14 @@
     </div>
     
     <script>
-        // EvaraTap Dashboard Logic - v3.5 (Decoupled MQTT Proxy)
-
+        // EvaraTap Dashboard Logic - v4.0 (On-Demand Polling Architecture)
         document.addEventListener('DOMContentLoaded', () => {
-            // --- URL OF THE SEPARATELY DEPLOYED MQTT PROXY SERVICE ---
-            // --- IMPORTANT: REPLACE THIS WITH YOUR ACTUAL RENDER URL ---
-            const MQTT_PROXY_URL = 'https://evaratap-mqtt-proxy.onrender.com';
 
             // --- VIRTUAL PINS & CONSTANTS ---
             const VPIN = {
                 TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2',
-                VOLUME_LIMIT: 'v4', CMD_OPEN_VALVE: 'v10', CMD_CLOSE_VALVE: 'v11',
+                VOLUME_LIMIT: 'v4', CMD_POWER_RELAY: 'v6',
+                CMD_OPEN_VALVE: 'v10', CMD_CLOSE_VALVE: 'v11',
                 CMD_RESET_VOLUME: 'v12', CMD_SET_LIMIT: 'v13'
             };
             
@@ -248,17 +266,16 @@
                 modalConfirmBtn: document.getElementById('modalConfirmBtn'),
                 modalCancelBtn: document.getElementById('modalCancelBtn'), 
                 offlineOverlay: document.getElementById('offlineOverlay'),
-                btnReconnect: document.getElementById('btnReconnect'), 
-                reconnectTimer: document.getElementById('reconnectTimer'),
-                emergencyPowerOffBtn: document.getElementById('emergencyPowerOffBtn')
+                btnConnect: document.getElementById('btnConnect'), 
+                connectionTimer: document.getElementById('connectionTimer'),
+                emergencyStopBtn: document.getElementById('emergencyStopBtn')
             };
 
             // --- STATE & CHART VARIABLES ---
             let socket, reconnectInterval = 1000, volumeChart = null;
             let currentFlowRate = 0, currentTotalVolume = 0;
             let confirmAction = null;
-            let reconnectTimerInterval = null;
-            let initialConnectionTimeout = null;
+            let connectionTimeout = null;
 
             // --- WEBSOCKET CONNECTION ---
             function connectWebSocket() {
@@ -270,15 +287,14 @@
 
             function setupSocketListeners() {
                 socket.onopen = () => {
-                    clearTimeout(initialConnectionTimeout);
                     console.log('✅ WebSocket connected.');
-                    reconnectInterval = 1000;
-                    showNotification('Connected to server!', 'info');
+                    reconnectInterval = 1000; // Reset reconnect backoff on successful connection
                 };
 
                 socket.onclose = () => {
                     console.warn('❌ WebSocket connection lost. Reconnecting...');
                     updateDeviceOnlineStatus(false);
+                    // Implement exponential backoff for reconnect attempts
                     setTimeout(connectWebSocket, Math.min(reconnectInterval *= 1.5, 30000));
                 };
 
@@ -287,23 +303,15 @@
                         const message = JSON.parse(event.data);
                         const { type, payload, deviceOnline } = message;
 
-                        // This logic has a small bug. It should be:
-                        // updateDeviceOnlineStatus(deviceOnline);
-                        // if (deviceOnline) { processPayload(payload); }
-                        // For now, keeping original logic for consistency.
-                        
-                        if (type === 'device-offline') {
-                            updateDeviceOnlineStatus(false);
-                        } else if (type === 'initial-state' || type === 'data-update') {
-                            if (deviceOnline) {
-                                updateDeviceOnlineStatus(true);
-                                updateUI(payload); // Ensure UI updates with new data
-                                if (reconnectTimerInterval) {
-                                    clearReconnectTimer(true); // Pass true for success
-                                    showNotification('Device reconnected successfully!', 'success');
-                                }
-                            } else {
-                                updateDeviceOnlineStatus(false);
+                        updateDeviceOnlineStatus(deviceOnline);
+
+                        if (deviceOnline) {
+                            updateUI(payload);
+                            // If we received an online status, clear any pending connection timeouts
+                            if (connectionTimeout) {
+                                clearTimeout(connectionTimeout);
+                                connectionTimeout = null;
+                                showNotification('Device connected successfully!', 'success');
                             }
                         }
                     } catch (e) {
@@ -312,76 +320,32 @@
                 };
             }
 
-            // --- MQTT POWER CONTROL (UPDATED) ---
-            async function sendMqttPowerCommand(command) {
-                const endpoint = command === 'ON' ? `${MQTT_PROXY_URL}/power-on` : `${MQTT_PROXY_URL}/power-off`;
+            // --- CONNECTION LOGIC ---
+            async function handleConnectionAttempt() {
+                lockSystemForConnection('⚡ Powering On...', 'Attempting to establish a connection with the device.');
+                DOMElements.btnConnect.disabled = true;
+                DOMElements.btnConnect.textContent = 'Connecting...';
+
                 try {
-                    showNotification(`Sending Power ${command} command...`, 'info');
-                    const response = await fetch(endpoint, { 
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({})
-                    });
-                    if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
-                    showNotification(`Power ${command} command sent successfully!`, 'success');
-                    return true;
-                } catch (error) {
-                    console.error(`MQTT Command Failed:`, error);
-                    showNotification(`Failed to send Power ${command} command.`, 'error');
-                    return false;
-                }
-            }
-
-            async function resumeBlynkPolling() {
-                try {
-                    await fetch('/api/resume-polling', { method: 'POST' });
-                } catch (e) {
-                    console.error('Failed to send resume polling request:', e);
-                }
-            }
-            
-            // --- RECONNECTION LOGIC ---
-            async function handleReconnect() {
-                lockSystemSafety('⚡ Powering On...', 'Attempting to reconnect to the device.', false);
-                DOMElements.btnReconnect.disabled = true;
-                DOMElements.btnReconnect.textContent = 'Powering On...';
-                
-                const success = await sendMqttPowerCommand('ON');
-                if (!success) {
-                    lockSystemSafety('❌ Command Failed', 'Could not send power-on command. Please check the proxy server.', true);
-                    clearReconnectTimer(false);
-                    return;
-                }
-
-                resumeBlynkPolling();
-
-                let secondsLeft = 15;
-                DOMElements.btnReconnect.textContent = 'Waiting for Device...';
-                DOMElements.reconnectTimer.style.display = 'inline-block';
-                DOMElements.reconnectTimer.textContent = `Timeout in ${secondsLeft}s`;
-                
-                reconnectTimerInterval = setInterval(() => {
-                    secondsLeft--;
-                    DOMElements.reconnectTimer.textContent = `Timeout in ${secondsLeft}s`;
-                    if (secondsLeft <= 0) {
-                        clearReconnectTimer(false);
-                        showNotification('Connection attempt timed out.', 'error');
+                    const response = await fetch('/api/start-connection', { method: 'POST' });
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.statusText}`);
                     }
-                }, 1000);
-            }
-            
-            function clearReconnectTimer(isSuccess) {
-                clearInterval(reconnectTimerInterval);
-                reconnectTimerInterval = null;
-                DOMElements.reconnectTimer.style.display = 'none';
-                DOMElements.reconnectTimer.textContent = '';
-                DOMElements.btnReconnect.disabled = false;
-                DOMElements.btnReconnect.textContent = '🔄 Try Reconnecting';
-                if (!isSuccess) {
-                     lockSystemSafety('❌ Reconnect Failed', 'The device did not come online in time.', true);
+                    
+                    // Start a frontend timeout. If the backend doesn't confirm an online status
+                    // within this time, we assume failure.
+                    connectionTimeout = setTimeout(() => {
+                        showNotification('Connection attempt timed out.', 'error');
+                        updateDeviceOnlineStatus(false); // This will reset the UI
+                    }, 20000); // 20-second timeout
+
+                } catch (error) {
+                    console.error('Failed to start connection sequence:', error);
+                    showNotification('Failed to send connection command.', 'error');
+                    updateDeviceOnlineStatus(false); // Reset UI on failure
                 }
             }
-
+            
             // --- UI & STATE MANAGEMENT ---
             function updateDeviceOnlineStatus(isOnline) {
                 if (isOnline) {
@@ -392,36 +356,43 @@
                     DOMElements.offlineOverlay.classList.remove('show');
                     DOMElements.analyticsCard.style.opacity = '1';
                     DOMElements.analyticsCard.style.pointerEvents = 'auto';
-                    DOMElements.emergencyPowerOffBtn.style.display = 'block';
+                    DOMElements.emergencyStopBtn.style.display = 'inline-flex';
                 } else {
-                    lockSystemSafety('🔌 Device Offline', 'The ESP32 is not responding. Use the reconnect button to power cycle.', true);
+                    lockSystemSafety('🛡️ System Offline', 'Press the button below to power on and connect to the device.', true);
                     DOMElements.deviceStatus.textContent = 'OFFLINE';
                     DOMElements.deviceStatus.className = 'device-status-indicator offline';
                     DOMElements.flowCard.className = 'card offline-device';
                     DOMElements.offlineOverlay.classList.add('show');
                     DOMElements.analyticsCard.style.opacity = '0.5';
                     DOMElements.analyticsCard.style.pointerEvents = 'none';
-                    DOMElements.emergencyPowerOffBtn.style.display = 'none';
+                    DOMElements.emergencyStopBtn.style.display = 'none';
                     DOMElements.flowRate.textContent = '--.--';
                     DOMElements.valveStatus.textContent = 'UNKNOWN';
                     DOMElements.valveStatus.className = 'status-value';
                 }
             }
 
-            function lockSystemSafety(title, subtitle, showReconnectButton = false) {
+            function lockSystemSafety(title, subtitle, showConnectButton = false) {
                 document.body.classList.add('safety-lockdown');
                 DOMElements.lockdownMessage.innerHTML = `${title}<small>${subtitle}</small>`;
-                DOMElements.reconnectTimer.style.display = 'none'; // Always hide timer initially
-                if (showReconnectButton) {
-                    DOMElements.btnReconnect.style.display = 'inline-flex';
+                if (showConnectButton) {
+                    DOMElements.btnConnect.style.display = 'inline-flex';
+                    DOMElements.btnConnect.disabled = false;
+                    DOMElements.btnConnect.innerHTML = `⚡ Connect to Device`;
                 } else {
-                    DOMElements.btnReconnect.style.display = 'none';
+                    DOMElements.btnConnect.style.display = 'none';
                 }
+            }
+
+            function lockSystemForConnection(title, subtitle) {
+                document.body.classList.add('safety-lockdown');
+                DOMElements.lockdownMessage.innerHTML = `${title}<small>${subtitle}</small>`;
+                DOMElements.btnConnect.style.display = 'inline-flex'; // Keep button visible but disabled
+                DOMElements.btnConnect.disabled = true;
             }
 
             function unlockSystemSafety() {
                 document.body.classList.remove('safety-lockdown');
-                DOMElements.btnReconnect.style.display = 'none';
             }
 
             function updateUI(data) {
@@ -531,16 +502,17 @@
             function setupEventListeners() {
                 DOMElements.openBtn.addEventListener('click', () => updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1));
                 DOMElements.closeBtn.addEventListener('click', () => updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1));
+                
                 DOMElements.resetVolumeBtn.addEventListener('click', () => {
                     showConfirmation('Reset Volume?', 'This will reset the total volume counter to zero.', () => {
                         showNotification('Resetting volume...', 'info');
                         updateBlynkPinValue(VPIN.CMD_RESET_VOLUME, 1);
                     });
                 });
+
                 DOMElements.setLimitBtn.addEventListener('click', () => {
                     const limitInput = DOMElements.volumeLimitInput;
                     const limit = parseFloat(limitInput.value);
-
                     if (isNaN(limit) || limit < 1 || limit > 9999) {
                         showNotification('Please enter a valid limit (1-9999).', 'error');
                         limitInput.focus();
@@ -550,34 +522,30 @@
                     updateBlynkPinValue(VPIN.CMD_SET_LIMIT, limit);
                 });
 
-                DOMElements.btnReconnect.addEventListener('click', handleReconnect);
-                DOMElements.emergencyPowerOffBtn.addEventListener('click', () => {
-                    showConfirmation('Emergency Power Off?', 'This will immediately cut power to the main device via the MQTT relay.', async () => {
-                        await sendMqttPowerCommand('OFF');
-                        updateDeviceOnlineStatus(false);
+                DOMElements.btnConnect.addEventListener('click', handleConnectionAttempt);
+                
+                DOMElements.emergencyStopBtn.addEventListener('click', () => {
+                    showConfirmation('Emergency Stop?', 'This will immediately cut power to the main device and stop all operations.', () => {
+                        updateBlynkPinValue(VPIN.CMD_POWER_RELAY, 0);
                     });
                 });
+
                 DOMElements.modalCancelBtn.addEventListener('click', hideConfirmation);
                 DOMElements.modalConfirmBtn.addEventListener('click', () => {
                     if (typeof confirmAction === 'function') confirmAction();
                     hideConfirmation();
                 });
+
                 DOMElements.volumeLimitInput.addEventListener('keydown', (e) => {
-                    if (['e', '+', '-'].includes(e.key)) {
-                        e.preventDefault();
-                    }
+                    if (['e', '+', '-'].includes(e.key)) e.preventDefault();
                 });
             }
 
             // --- INITIALIZATION ---
             initializeGauge();
             setupEventListeners();
-            lockSystemSafety('🛡️ CONNECTING...', 'Establishing secure connection to the server.');
-            connectWebSocket();
-
-            initialConnectionTimeout = setTimeout(() => {
-                lockSystemSafety('❌ Connection Failed', 'Could not connect to the server. Please check your network.', true);
-            }, 15000); // 15-second timeout for initial connection
+            lockSystemSafety('🛡️ System Offline', 'Press the button below to power on and connect to the device.', true);
+            connectWebSocket(); // Connect WebSocket on load to listen for server events
         });
     </script>
 </body>

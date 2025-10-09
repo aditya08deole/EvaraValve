@@ -1,11 +1,13 @@
 {
-  "name": "evaratap-server",
-  "version": "2.1.0",
-  "description": "Secure and robust backend for the EvaraTap IoT dashboard with improved error handling and heartbeat detection.",
-  "main": "server.js",
+  "name": "evaratap-server-v3",
+  "version": "3.0.0",
+  "description": "Backend for EvaraTap with a dual-service architecture for Blynk data polling and MQTT power control.",
+  "main": "server/blynk-server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server/blynk-server.js",
+    "start:blynk": "node server/blynk-server.js",
+    "start:mqtt": "node server/mqtt-proxy.js"
   },
   "dependencies": {
     "express": "^4.19.2",
@@ -19,9 +21,9 @@
     "iot",
     "esp32",
     "blynk",
-    "node",
-    "dashboard",
-    "EvaraTap"
+    "mqtt",
+    "adafruit-io",
+    "dashboard"
   ],
   "author": "aditya08deole",
   "license": "MIT"

@@ -1,12 +1,14 @@
 /**
- * EvaraTap Secure Backend for Blynk on Render - v2.1 FIXED
+ * EvaraTap Secure Backend for Blynk on Render - v4.0
  *
- * FIXES APPLIED:
- * 1. Corrected Blynk API update endpoint call format
- * 2. Added proper error logging with response text
- * 3. Improved heartbeat detection logic
- * 4. Added CORS headers for cross-origin support
- * 5. Better error handling and status reporting
+ * ARCHITECTURAL REVISION:
+ * 1. Removed all external MQTT dependencies for power control.
+ * 2. Integrated power control via Blynk Virtual Pin V6.
+ * 3. Replaced the "always-on" dual-mode polling with a more efficient,
+ * on-demand, single-mode polling system. Polling is now only active
+ * when initiated by a user and automatically stops on disconnect.
+ * 4. Added a new endpoint to initiate the connection and polling sequence.
+ * 5. Enhanced error handling and state management for a more robust system.
  */
 
 import express from 'express';
@@ -22,202 +24,185 @@ const PORT = process.env.PORT || 10000;
 const BLYNK_AUTH_TOKEN = process.env.BLYNK_AUTH_TOKEN;
 const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
-// --- Smart Polling Configuration ---
-const POLLING_RATE_ACTIVE_MS = 5000;      // Poll every 5 seconds when device is ONLINE
-const POLLING_RATE_IDLE_MS = 15*60000;       // Poll every 15*60 seconds when device is OFFLINE
-const STALE_DATA_THRESHOLD_MS = 15000;    // Consider data stale after 15 seconds of no uptime change
+// --- On-Demand Polling Configuration ---
+const POLLING_RATE_MS = 5000;         // Poll every 5 seconds ONLY when active
+const STALE_POLL_THRESHOLD = 3;       // Mark device offline after 3 consecutive stale polls (15 seconds)
 
 // Define all virtual pins your dashboard needs to monitor
-const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v3', 'v4', 'v5'];
+const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v4', 'v5', 'v6'];
+const UPTIME_PIN = 'v5';
+const POWER_RELAY_PIN = 'v6';
 
-// --- STATE MANAGEMENT & CACHE ---
+// --- STATE MANAGEMENT ---
 let deviceDataCache = {};
 let lastUptimeValue = -1;
-let lastDataReceivedTimestamp = Date.now();
-let isDeviceOnline = true;
-let consecutiveStalePolls = 0; // NEW: Track how many polls returned stale data
+let consecutiveStalePolls = 0;
+let isDeviceOnline = false;
+let isPollingActive = false; // The master switch for the polling loop
+let pollingTimeoutId = null; // To control the setTimeout loop
 
 // --- VALIDATION ---
 if (!BLYNK_AUTH_TOKEN) {
     console.error('❌ CRITICAL ERROR: BLYNK_AUTH_TOKEN is not set in the environment variables.');
     process.exit(1);
 }
-
 console.log('✅ Blynk Auth Token loaded:', BLYNK_AUTH_TOKEN.substring(0, 8) + '...');
 
 // --- EXPRESS CONFIGURATION ---
 app.use(express.json());
 
-// CORS headers for cross-origin requests
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
-    next();
-});
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- CORE LOGIC: BLYNK DATA POLLING (IMPROVED) ---
-const pollBlynkData = async () => {
-    try {
-        const pinParams = VIRTUAL_PINS_TO_POLL.join('&');
-        const url = `${BLYNK_API_BASE}/get?token=${BLYNK_AUTH_TOKEN}&${pinParams}`;
-        
-        const blynkResponse = await fetch(url);
-        
-        if (!blynkResponse.ok) {
-            const errorText = await blynkResponse.text();
-            throw new Error(`Blynk API Error ${blynkResponse.status}: ${errorText}`);
-        }
-        
-        const newData = await blynkResponse.json();
-        const currentUptime = parseInt(newData.v5) || 0;
 
-        // IMPROVED HEARTBEAT LOGIC
-        if (currentUptime !== undefined && lastUptimeValue === currentUptime) {
+// --- BLYNK API HELPERS ---
+/**
+ * A centralized and robust function for making GET requests to the Blynk API.
+ * @param {string} endpoint - The specific API endpoint (e.g., 'get', 'update').
+ * @param {string} params - The query parameters for the request.
+ * @returns {Promise<object|null>} The JSON response from Blynk or null on failure.
+ */
+async function callBlynkApi(endpoint, params) {
+    const url = `${BLYNK_API_BASE}/${endpoint}?token=${BLYNK_AUTH_TOKEN}&${params}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`❌ Blynk API Error on ${endpoint} (${response.status}):`, errorText);
+            return null;
+        }
+        // For 'update' calls, Blynk might return an empty body on success.
+        if (response.headers.get('content-length') === '0') {
+            return { success: true };
+        }
+        return response.json();
+    } catch (error) {
+        console.error(`❌ Network error calling Blynk API on ${endpoint}:`, error.message);
+        return null;
+    }
+}
+
+// --- CORE LOGIC: ON-DEMAND BLYNK DATA POLLING ---
+const pollBlynkData = async () => {
+    // This is the master gate. If polling is not active, do nothing.
+    if (!isPollingActive) {
+        console.log('Polling is inactive. Stopping.');
+        return;
+    }
+
+    const pinParams = VIRTUAL_PINS_TO_POLL.join('&');
+    const newData = await callBlynkApi('get', pinParams);
+
+    if (!newData) {
+        // If the API call itself fails, treat it as a stale poll
+        consecutiveStalePolls++;
+    } else {
+        const currentUptime = parseInt(newData[UPTIME_PIN]) || 0;
+
+        // Heartbeat Logic: Check if uptime value has changed
+        if (lastUptimeValue === currentUptime) {
             consecutiveStalePolls++;
-            
-            // Only mark offline after 3 consecutive stale polls
-            if (consecutiveStalePolls >= 3) {
-                if (isDeviceOnline) {
-                    console.warn('⚠️  Stale data detected. ESP32 appears to be OFFLINE.');
-                    console.log('🐌 Switching to Idle Mode (polling every 60 seconds).');
-                    isDeviceOnline = false;
-                }
-                // Don't broadcast stale data
-            } else {
-                // Still within grace period, broadcast the data
-                broadcastDataUpdate(newData);
-            }
         } else {
-            // Uptime has changed - device is definitely online
-            consecutiveStalePolls = 0;
-            
+            // Fresh data detected! Device is online.
             if (!isDeviceOnline) {
-                console.info('✅ Fresh data detected! ESP32 is back ONLINE.');
-                console.log('🚀 Switching to Active Mode (polling every 5 seconds).');
+                console.info('✅ Fresh data detected! ESP32 is ONLINE.');
             }
-            
             isDeviceOnline = true;
+            consecutiveStalePolls = 0;
             lastUptimeValue = currentUptime;
-            lastDataReceivedTimestamp = Date.now();
             broadcastDataUpdate(newData);
         }
-    } catch (error) {
-        console.error('❌ Polling Error:', error.message);
-        isDeviceOnline = false;
-    } finally {
-        const nextPollDelay = isDeviceOnline ? POLLING_RATE_ACTIVE_MS : POLLING_RATE_IDLE_MS;
-        setTimeout(pollBlynkData, nextPollDelay);
     }
+
+    // Check for disconnection condition
+    if (consecutiveStalePolls >= STALE_POLL_THRESHOLD) {
+        console.warn(`⚠️ Stale data detected for ${STALE_POLL_THRESHOLD} consecutive polls. ESP32 is now OFFLINE.`);
+        isDeviceOnline = false;
+        isPollingActive = false; // Stop the polling loop
+        broadcastDataUpdate(deviceDataCache); // Broadcast last known state with offline status
+        
+        // Safety measure: Turn off the power relay when device disconnects
+        console.log(`🔌 Safety shutdown: Turning off power relay (${POWER_RELAY_PIN}).`);
+        await callBlynkApi('update', `${POWER_RELAY_PIN}=0`);
+        return; // Explicitly stop the loop
+    }
+
+    // If we've reached here, polling is still active. Schedule the next run.
+    pollingTimeoutId = setTimeout(pollBlynkData, POLLING_RATE_MS);
 };
 
-// --- FIXED: API ENDPOINT FOR UPDATING PINS ---
+// --- API ENDPOINTS ---
+
+// NEW: Endpoint to start the connection and polling sequence
+app.post('/api/start-connection', async (req, res) => {
+    if (isPollingActive) {
+        return res.status(400).json({ message: 'A connection attempt is already in progress.' });
+    }
+    console.log('🔌 Received request to start connection. Powering on device...');
+    
+    const powerOnResult = await callBlynkApi('update', `${POWER_RELAY_PIN}=1`);
+    
+    if (!powerOnResult) {
+        return res.status(500).json({ error: 'Failed to send power-on command to Blynk.' });
+    }
+
+    // Reset state and activate polling
+    isPollingActive = true;
+    isDeviceOnline = false; // Assume offline until first fresh data
+    consecutiveStalePolls = 0;
+    lastUptimeValue = -1;
+    
+    // Clear any previous stray timeouts and start the loop immediately
+    if (pollingTimeoutId) clearTimeout(pollingTimeoutId);
+    pollBlynkData();
+    
+    res.status(202).json({ success: true, message: 'Connection sequence initiated.' });
+});
+
+
+// UPDATED: Endpoint for generic pin updates (including emergency stop)
 app.post('/api/update-pin', async (req, res) => {
     const { pin, value } = req.body;
     
-    console.log(`📤 Received command: ${pin} = ${value}`);
-    
     if (!pin || value === undefined) {
-        console.error('❌ Invalid request: missing pin or value');
-        return res.status(400).json({ 
-            error: 'Pin and value are required.',
-            received: { pin, value }
-        });
+        return res.status(400).json({ error: 'Pin and value are required.' });
+    }
+    console.log(`📤 Received command: Set ${pin} = ${value}`);
+
+    // If this is an emergency stop command, also halt server-side polling
+    if (pin === POWER_RELAY_PIN && parseInt(value) === 0) {
+        console.log('🚨 EMERGENCY STOP received. Halting polling loop.');
+        isPollingActive = false;
+        isDeviceOnline = false;
+        if (pollingTimeoutId) clearTimeout(pollingTimeoutId);
+        broadcastDataUpdate(deviceDataCache); // Broadcast offline status immediately
     }
 
-    try {
-        // FIXED: Correct Blynk API format
-        // The update endpoint expects: /update?token=XXX&pin=value
-        const url = `${BLYNK_API_BASE}/update?token=${BLYNK_AUTH_TOKEN}&${pin}=${value}`;
-        
-        console.log(`🔗 Calling Blynk API: ${url.replace(BLYNK_AUTH_TOKEN, 'TOKEN_HIDDEN')}`);
-        
-        const blynkResponse = await fetch(url, {
-            method: 'GET',  // Blynk's REST API uses GET for updates
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const responseText = await blynkResponse.text();
-        
-        if (!blynkResponse.ok) {
-            console.error(`❌ Blynk API Error ${blynkResponse.status}:`, responseText);
-            throw new Error(`Blynk API Error ${blynkResponse.status}: ${responseText}`);
-        }
-        
-        console.log(`✅ Blynk API Response:`, responseText);
-        
-        res.status(200).json({ 
-            success: true, 
-            message: `Pin ${pin} updated to ${value}`,
-            blynkResponse: responseText
-        });
-        
-    } catch (error) {
-        console.error('❌ Error updating Blynk pin:', error.message);
-        res.status(500).json({ 
-            error: 'Failed to update pin',
-            details: error.message,
-            pin: pin,
-            value: value
-        });
+    const result = await callBlynkApi('update', `${pin}=${value}`);
+
+    if (!result) {
+        return res.status(500).json({ error: 'Failed to update pin via Blynk API.' });
     }
-});
-
-// --- HEALTH CHECK ENDPOINT ---
-app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        deviceOnline: isDeviceOnline,
-        lastUptime: lastUptimeValue,
-        cacheKeys: Object.keys(deviceDataCache)
-    });
-});
-
-// --- ROOT ENDPOINT ---
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// --- DEBUG ENDPOINT (helpful for troubleshooting) ---
-app.get('/api/debug', (req, res) => {
-    res.json({
-        deviceOnline: isDeviceOnline,
-        lastUptime: lastUptimeValue,
-        cache: deviceDataCache,
-        lastDataReceived: new Date(lastDataReceivedTimestamp).toISOString(),
-        consecutiveStalePolls: consecutiveStalePolls,
-        connectedClients: wss.clients.size
-    });
-});
-
-// --- SERVER INITIALIZATION ---
-const server = app.listen(PORT, () => {
-    console.log(`🚀 EvaraTap Server v2.1 is running on port ${PORT}`);
-    console.log(`🔗 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`📍 Access at: http://localhost:${PORT}`);
     
-    // Start the smart polling loop
-    pollBlynkData();
+    res.status(200).json({ success: true, message: `Pin ${pin} updated successfully.` });
 });
 
-// --- WEBSOCKET SERVER LOGIC ---
+
+// --- SERVER & WEBSOCKET INITIALIZATION ---
+const server = app.listen(PORT, () => {
+    console.log(`🚀 EvaraTap Server v4.0 is running on port ${PORT}`);
+    console.log('   Waiting for client to initiate connection...');
+});
+
 const wss = new WebSocketServer({ server });
 
 function broadcastDataUpdate(data) {
-    deviceDataCache = data;
+    deviceDataCache = data; // Update the cache with the latest data
     const message = JSON.stringify({
-        type: 'data-update',
+        type: isDeviceOnline ? 'data-update' : 'device-offline',
         payload: deviceDataCache,
+        deviceOnline: isDeviceOnline,
         timestamp: Date.now()
     });
 
@@ -229,37 +214,22 @@ function broadcastDataUpdate(data) {
         }
     });
     
-    if (clientCount > 0) {
+    if (clientCount > 0 && isDeviceOnline) {
         console.log(`📡 Broadcast to ${clientCount} client(s): v0=${data.v0}L, v1=${data.v1}LPM, v2=${data.v2}, v5=${data.v5}s`);
     }
 }
 
-wss.on('connection', (ws, req) => {
-    const clientIP = req.socket.remoteAddress;
-    console.log(`✅ Client connected from ${clientIP}`);
+wss.on('connection', (ws) => {
+    console.log('✅ Client connected to WebSocket.');
     
-    // Send initial state immediately
-    const initialStateMessage = JSON.stringify({
+    // Send the current state immediately on connection
+    ws.send(JSON.stringify({
         type: 'initial-state',
         payload: deviceDataCache,
+        deviceOnline: isDeviceOnline,
         timestamp: Date.now()
-    });
-    ws.send(initialStateMessage);
+    }));
     
-    ws.on('close', () => {
-        console.log(`❌ Client disconnected from ${clientIP}`);
-    });
-    
-    ws.on('error', (error) => {
-        console.error('WebSocket client error:', error);
-    });
-});
-
-// --- GRACEFUL SHUTDOWN ---
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully...');
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-    });
+    ws.on('close', () => console.log('❌ Client disconnected from WebSocket.'));
+    ws.on('error', (error) => console.error('WebSocket client error:', error));
 });

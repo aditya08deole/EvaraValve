@@ -1,23 +1,14 @@
-# EvaraTap v3.5 - Single Service Blueprint for Render
-#
-# This blueprint defines the infrastructure for the main EvaraTap application on Render.
-# It consists of the primary backend that handles Blynk data polling and serves the dashboard.
-# The MQTT proxy is now a separate service and is not defined in this file.
-
 services:
-  # The main server for Blynk polling and serving the user dashboard.
   - type: web
-    name: evaratap-blynk-server
+    name: evaratap-blynk-dashboard
     runtime: node
-    plan: free # Note: Free instances may spin down after periods of inactivity.
-    region: oregon # Specify a region for consistent deployment performance.
-    branch: main
-    healthCheckPath: /health
-    buildCommand: "npm install" # Installs dependencies.
-    startCommand: "npm run start:blynk"
+    plan: free
+    # The build command explicitly uses npm. The --force flag helps resolve conflicts.
+    buildCommand: "npm install --force" 
+    startCommand: "npm start"
     envVars:
       - key: NODE_ENV
         value: production
-      - key: NODE_VERSION
-        value: "20.11.1" # Quoting the version ensures it's treated as a string.
-      - fromSecretGroup: evaratap-credentials
+      - key: BLYNK_AUTH_TOKEN
+        # This value MUST be set in your Render dashboard Environment tab
+        sync: false 

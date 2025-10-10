@@ -18,8 +18,8 @@ const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 // --- Polling and Offline Detection Configuration ---
 // The system detects an offline device in STALE_POLL_THRESHOLD * POLLING_RATE_MS.
 // Current configuration: 4 polls * 2000ms = 8 seconds.
-const POLLING_RATE_MS = 1500;      // Poll every 2 seconds ONLY when a client is active.
-const STALE_POLL_THRESHOLD = 6;         // Mark device offline after 4 consecutive stale polls.
+const POLLING_RATE_MS = 2000;      // Poll every 2 seconds ONLY when a client is active.
+const STALE_POLL_THRESHOLD = 10;         // Mark device offline after 4 consecutive stale polls.
 const COMMAND_CONFIRM_DELAY_MS = 2000; // Wait 750ms before checking if a command was successful.
 
 

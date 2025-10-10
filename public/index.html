@@ -3,34 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvaraValve Smart Flow Control v5.3</title>
+    <title>EvaraValve Smart Flow Control v6.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* EvaraTap Dashboard Styles - v5.3 (Fully Adaptive UI) */
+        /* EvaraTap Dashboard Styles - v6.0 (With Command Feedback) */
         :root {
             --primary-color: #00c6ff; --secondary-color: #f0f8ff;
             --success-color: #2ecc71; --danger-color: #e74c3c;
             --warning-color: #f39c12; 
-            /* ADAPTIVE CHANGE: Darker border for better contrast on video */
             --border-color: rgba(255, 255, 255, 0.2); 
         }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
         
         #bg-video {
-            position: fixed;
-            right: 0; bottom: 0;
+            position: fixed; right: 0; bottom: 0;
             min-width: 100%; min-height: 100%;
-            width: auto; height: auto;
-            z-index: -100;
-            object-fit: cover;
+            width: auto; height: auto; z-index: -100; object-fit: cover;
         }
 
         body {
-            color: #fff;
-            min-height: 100vh;
-            padding: 20px;
-            background-color: #005c97;
-            overflow-x: hidden;
+            color: #fff; min-height: 100vh; padding: 20px;
+            background-color: #005c97; overflow-x: hidden;
         }
 
         .container { max-width: 1200px; margin: 0 auto; }
@@ -39,40 +32,47 @@
         p { font-size: 1.1rem; opacity: 0.9; }
 
         .emergency-stop-btn {
-            position: fixed;
-            bottom: 20px; left: 20px;
-            z-index: 1003;
+            position: fixed; bottom: 20px; left: 20px; z-index: 1003;
             background: linear-gradient(135deg, #e74c3c, #c03b2b); color: white; border: none;
             padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer;
             box-shadow: 0 4px 15px rgba(0,0,0, 0.4);
             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            display: none;
-            align-items: center; gap: 8px;
+            display: none; align-items: center; gap: 8px;
             border: 1px solid rgba(255,255,255,0.3);
         }
         .emergency-stop-btn:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 8px 25px rgba(0,0,0, 0.5); }
         .emergency-stop-btn:active { transform: scale(0.98); }
 
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        .btn { padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        .btn { padding: 15px 25px; border: none; border-radius: 50px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.2); position: relative; overflow: hidden; }
         .btn-open { background: linear-gradient(to right, #00b09b, #96c93d); color: white; }
         .btn-close { background: linear-gradient(to right, #e74c3c, #c03b2b); color: white; }
         .btn:disabled { background: #576574; cursor: not-allowed; opacity: 0.6; }
         .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 7px 10px rgba(0,0,0,0.3); }
 
-        /* ADAPTIVE CHANGE: Darker, more blurred cards for better readability over video */
+        /* --- NEW: Styles for button pending state --- */
+        .btn .btn-text { transition: opacity 0.2s ease; }
+        .btn .spinner {
+            position: absolute; top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            margin-top: -10px; margin-left: -10px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            opacity: 0; transition: opacity 0.2s ease;
+        }
+        .btn.pending .btn-text { opacity: 0; }
+        .btn.pending .spinner { opacity: 1; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
         .card { 
-            background: rgba(10, 25, 41, 0.45);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-radius: 20px; 
-            padding: 25px; 
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            background: rgba(10, 25, 41, 0.45); backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px); border-radius: 20px; 
+            padding: 25px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
             border: 1px solid var(--border-color);
-            position: relative; 
-            transition: all 0.3s ease; 
-            overflow: hidden; 
+            position: relative; transition: all 0.3s ease; overflow: hidden; 
         }
         .card-title { font-size: 1.5rem; margin-bottom: 20px; color: var(--secondary-color); text-align: center; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 600;}
 
@@ -93,7 +93,6 @@
         .offline-title { font-size: 1.8rem; font-weight: bold; margin-bottom: 15px; }
         .offline-message { font-size: 1rem; color: #bdc3c7; line-height: 1.6; }
         
-        /* ADAPTIVE CHANGE: Added text-shadow for readability */
         .flow-display { text-align: center; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 15px; margin-bottom: 20px; }
         .flow-value { font-size: 3.5rem; font-weight: 700; text-shadow: 1px 1px 5px rgba(0,0,0,0.5); }
         .flow-unit { font-size: 1.2rem; opacity: 0.8; }
@@ -106,7 +105,6 @@
         .gauge-wrapper { position: relative; width: 100%; margin: 0 auto 20px; }
         .gauge-container { position: relative; width: 100%; height: 180px; }
         .gauge-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        /* ADAPTIVE CHANGE: Added text-shadow for readability */
         .gauge-value { font-size: 2.8rem; font-weight: 700; color: var(--secondary-color); text-shadow: 1px 1px 5px rgba(0,0,0,0.5); }
         .gauge-label { font-size: 1.1rem; color: #bdc3c7; }
         .limit-config-panel { margin-top: 20px; background: rgba(0,0,0,0.15); border-radius: 12px; padding: 20px; }
@@ -126,17 +124,26 @@
         .btn-connect { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; border: none; padding: 16px 45px; font-size: 1.2rem; font-weight: bold; border-radius: 50px; cursor: pointer; box-shadow: 0 6px 15px rgba(46, 204, 113, 0.4); transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 10px; margin-top: 20px; }
         .btn-connect:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(46, 204, 113, 0.6); }
         .btn-connect:disabled { background: #576574; cursor: not-allowed; opacity: 0.7; }
+
+        /* --- NEW: Toast Notification Styles --- */
+        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
+        .toast {
+            padding: 12px 20px; border-radius: 8px; font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0, 0.2);
+            opacity: 0; transform: translateX(100%);
+            animation: slideIn 0.5s forwards, slideOut 0.5s 4s forwards;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .toast.success { background: var(--success-color); color: white; }
+        .toast.error { background: var(--danger-color); color: white; }
+        @keyframes slideIn { to { opacity: 1; transform: translateX(0); } }
+        @keyframes slideOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
         
         /* --- Mobile Responsiveness --- */
         @media (max-width: 900px) {
-            .dashboard { 
-                grid-template-columns: 1fr;
-                /* ADAPTIVE CHANGE: Reduced gap for tighter mobile layout */
-                gap: 20px;
-            }
+            .dashboard { grid-template-columns: 1fr; gap: 20px; }
         }
         @media (max-width: 480px) {
-            /* ADAPTIVE CHANGE: Consistent padding for small screens */
             body { padding: 15px; }
             header { margin-bottom: 30px; }
             h1 { font-size: 2rem; }
@@ -149,22 +156,17 @@
     </style>
 </head>
 <body>
-    <!-- 
-        VIDEO BACKGROUND INSTRUCTIONS:
-        1. Place your video file (e.g., "ocean-background.mp4") inside the same 'public' folder as this index.html file.
-        2. The 'src' path below ("./ocean-background.mp4") tells the browser to look for the video in the current directory.
-        3. If you place the video in a subfolder (e.g., 'public/videos/'), you would change the path to "./videos/ocean-background.mp4".
-    -->
     <video autoplay muted loop playsinline id="bg-video">
         <source src="./ocean-background.mp4" type="video/mp4">
         Your browser does not support the video tag.
     </video>
+    
+    <div id="toast-container"></div>
 
     <button class="emergency-stop-btn" id="emergencyStopBtn">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.032z"/>
-        </svg>
-        EMERGENCY STOP
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.032z"/></svg>
+        <span class="btn-text">EMERGENCY STOP</span>
+        <span class="spinner"></span>
     </button>
     
     <div class="safety-lockdown-overlay">
@@ -187,9 +189,7 @@
                 <div class="offline-overlay" id="offlineOverlay">
                     <div class="offline-icon">🔌</div>
                     <div class="offline-title">Device Offline</div>
-                    <div class="offline-message">
-                        The device is not responding. Use the main connect button to re-establish connection.
-                    </div>
+                    <div class="offline-message">The device is not responding. Use the main connect button to re-establish connection.</div>
                 </div>
                 
                 <div class="device-status-indicator offline" id="deviceStatus">OFFLINE</div>
@@ -203,8 +203,14 @@
                     <span class="status-value" id="valveStatus">UNKNOWN</span>
                 </div>
                 <div class="controls">
-                    <button class="btn btn-open" id="openBtn">OPEN VALVE</button>
-                    <button class="btn btn-close" id="closeBtn">CLOSE VALVE</button>
+                    <button class="btn btn-open" id="openBtn">
+                        <span class="btn-text">OPEN VALVE</span>
+                        <span class="spinner"></span>
+                    </button>
+                    <button class="btn btn-close" id="closeBtn">
+                        <span class="btn-text">CLOSE VALVE</span>
+                        <span class="spinner"></span>
+                    </button>
                 </div>
             </div>
             
@@ -227,18 +233,24 @@
                     <div class="config-header">Set Auto-Shutoff Limit</div>
                     <div class="input-group">
                         <input type="number" class="limit-input" id="volumeLimitInput" placeholder="e.g., 100" min="1" max="9999">
-                        <button class="limit-set-btn" id="setLimitBtn">SET</button>
+                        <button class="limit-set-btn btn" id="setLimitBtn">
+                            <span class="btn-text">SET</span>
+                            <span class="spinner"></span>
+                        </button>
                     </div>
                 </div>
                 <div class="reset-buttons">
-                    <button class="btn btn-small-reset" id="resetVolumeBtn">RESET TOTAL VOLUME</button>
+                    <button class="btn btn-small-reset" id="resetVolumeBtn">
+                        <span class="btn-text">RESET TOTAL VOLUME</span>
+                        <span class="spinner"></span>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
     
     <script>
-        // EvaraTap Dashboard Logic - v5.3
+        // EvaraTap Dashboard Logic - v6.0 (With Command Feedback)
         document.addEventListener('DOMContentLoaded', () => {
 
             const VPIN = {
@@ -265,11 +277,11 @@
                 lockdownMessage: document.querySelector('.lockdown-message'),
                 offlineOverlay: document.getElementById('offlineOverlay'),
                 btnConnect: document.getElementById('btnConnect'), 
-                emergencyStopBtn: document.getElementById('emergencyStopBtn')
+                emergencyStopBtn: document.getElementById('emergencyStopBtn'),
+                toastContainer: document.getElementById('toast-container')
             };
 
             let socket, volumeChart = null;
-            let currentFlowRate = 0, currentTotalVolume = 0;
             let connectionTimeout = null;
 
             function connectWebSocket() {
@@ -306,13 +318,15 @@
                 try {
                     const response = await fetch('/api/start-connection', { method: 'POST' });
                     if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
+                    
                     connectionTimeout = setTimeout(() => {
-                        alert('Connection attempt timed out.'); // Replace with a styled modal
+                        showToast('Connection attempt timed out. Please try again.', 'error');
                         updateDeviceOnlineStatus(false);
-                    }, 20000);
+                    }, 20000); // 20-second timeout
+
                 } catch (error) {
                     console.error('Failed to start connection sequence:', error);
-                    alert('Failed to send connection command.'); // Replace with a styled modal
+                    showToast('Failed to send connection command. Check server.', 'error');
                     updateDeviceOnlineStatus(false);
                 }
             }
@@ -360,13 +374,15 @@
 
             function updateUI(data) {
                 if (!data) return;
+                
                 if (data[VPIN.FLOW_RATE] !== undefined) {
-                    currentFlowRate = parseFloat(data[VPIN.FLOW_RATE]);
-                    DOMElements.flowRate.textContent = currentFlowRate.toFixed(2);
+                    DOMElements.flowRate.textContent = parseFloat(data[VPIN.FLOW_RATE]).toFixed(2);
                 }
                 if (data[VPIN.TOTAL_VOLUME] !== undefined) {
-                    currentTotalVolume = parseFloat(data[VPIN.TOTAL_VOLUME]);
+                    const currentTotalVolume = parseFloat(data[VPIN.TOTAL_VOLUME]);
                     DOMElements.totalVolumeDisplay.textContent = `${currentTotalVolume.toFixed(1)} L`;
+                    let volumeLimit = parseFloat(DOMElements.volumeLimitDisplay.textContent) || 100;
+                    updateGauge(currentTotalVolume, volumeLimit);
                 }
                 if (data[VPIN.VALVE_STATUS] !== undefined) {
                     const isOpen = parseInt(data[VPIN.VALVE_STATUS]) === 1;
@@ -375,24 +391,70 @@
                     DOMElements.openBtn.disabled = isOpen;
                     DOMElements.closeBtn.disabled = !isOpen;
                 }
-                let volumeLimit = parseFloat(DOMElements.volumeLimitDisplay.textContent) || 100;
                 if (data[VPIN.VOLUME_LIMIT] !== undefined) {
-                    volumeLimit = parseFloat(data[VPIN.VOLUME_LIMIT]);
+                    const volumeLimit = parseFloat(data[VPIN.VOLUME_LIMIT]);
                     DOMElements.volumeLimitDisplay.textContent = `${volumeLimit.toFixed(1)} L`;
                     if (document.activeElement !== DOMElements.volumeLimitInput) {
                         DOMElements.volumeLimitInput.value = volumeLimit;
                     }
                 }
-                updateGauge(currentTotalVolume, volumeLimit);
             }
-            
-            async function updateBlynkPinValue(pin, value) {
+
+            /**
+             * NEW: A robust function to send commands with immediate UI feedback and confirmation.
+             * @param {HTMLElement} buttonEl - The button element that was clicked.
+             * @param {string} pin - The virtual pin to update.
+             * @param {string|number} value - The value to send.
+             * @param {string} successMessage - The message to show in a toast on success.
+             */
+            async function sendCommandWithFeedback(buttonEl, pin, value, successMessage) {
+                if (buttonEl.classList.contains('pending')) return; // Prevent double-sends
+
+                const originalContent = buttonEl.innerHTML;
+                buttonEl.classList.add('pending');
+                buttonEl.disabled = true;
+
                 try {
-                    await fetch('/api/update-pin', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    const response = await fetch('/api/update-pin', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ pin, value })
                     });
-                } catch (error) { console.error("Update Blynk Pin failed:", error); }
+                    
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.error || 'Unknown server error.');
+                    }
+                    
+                    showToast(successMessage || result.message, 'success');
+                    // On success, we DO NOT reset the button state here.
+                    // We let the WebSocket `updateUI` function handle the final state.
+                    // This creates a reliable, single source of truth for the UI.
+
+                } catch (error) {
+                    console.error("Command failed:", error);
+                    showToast(error.message, 'error');
+                    // On failure, revert the button to its original state so the user can try again.
+                    buttonEl.innerHTML = originalContent;
+                    buttonEl.classList.remove('pending');
+                    buttonEl.disabled = false;
+                }
+            }
+            
+            /**
+             * NEW: Displays a temporary toast notification.
+             * @param {string} message - The message to display.
+             * @param {'success'|'error'} type - The type of toast.
+             */
+            function showToast(message, type = 'success') {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = `${type === 'success' ? '✅' : '❌'} ${message}`;
+                DOMElements.toastContainer.appendChild(toast);
+                setTimeout(() => {
+                    toast.remove();
+                }, 4500); // The toast will be removed by its CSS animation, but this is a fallback.
             }
 
             function initializeGauge() {
@@ -400,29 +462,7 @@
                 const gradient = ctx.createLinearGradient(0, 0, 0, 180);
                 gradient.addColorStop(0, '#00c6ff');
                 gradient.addColorStop(1, '#0072ff');
-
-                volumeChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: { 
-                        datasets: [{ 
-                            data: [0, 100], 
-                            backgroundColor: [gradient, 'rgba(255, 255, 255, 0.1)'], 
-                            borderWidth: 0, 
-                            borderRadius: 10, 
-                            circumference: 270, 
-                            rotation: -135 
-                        }] 
-                    },
-                    options: { 
-                        cutout: '75%', 
-                        plugins: { legend: { display: false }, tooltip: { enabled: false } }, 
-                        maintainAspectRatio: false, 
-                        animation: { 
-                            duration: 1500, 
-                            easing: 'easeOutElastic'
-                        } 
-                    }
-                });
+                volumeChart = new Chart(ctx, { type: 'doughnut', data: { datasets: [{ data: [0, 100], backgroundColor: [gradient, 'rgba(255, 255, 255, 0.1)'], borderWidth: 0, borderRadius: 10, circumference: 270, rotation: -135 }] }, options: { cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutElastic' } } });
             }
 
             function updateGauge(value, max) {
@@ -434,18 +474,19 @@
             }
             
             function setupEventListeners() {
-                DOMElements.openBtn.addEventListener('click', () => updateBlynkPinValue(VPIN.CMD_OPEN_VALVE, 1));
-                DOMElements.closeBtn.addEventListener('click', () => updateBlynkPinValue(VPIN.CMD_CLOSE_VALVE, 1));
-                DOMElements.resetVolumeBtn.addEventListener('click', () => { if(confirm('Reset Volume?')) updateBlynkPinValue(VPIN.CMD_RESET_VOLUME, 1); });
+                DOMElements.openBtn.addEventListener('click', () => sendCommandWithFeedback(DOMElements.openBtn, VPIN.CMD_OPEN_VALVE, 1, 'Valve open command sent.'));
+                DOMElements.closeBtn.addEventListener('click', () => sendCommandWithFeedback(DOMElements.closeBtn, VPIN.CMD_CLOSE_VALVE, 1, 'Valve close command sent.'));
+                DOMElements.resetVolumeBtn.addEventListener('click', () => { if(confirm('Are you sure you want to reset the total volume?')) sendCommandWithFeedback(DOMElements.resetVolumeBtn, VPIN.CMD_RESET_VOLUME, 1, 'Volume reset command sent.'); });
                 DOMElements.setLimitBtn.addEventListener('click', () => {
                     const limit = parseFloat(DOMElements.volumeLimitInput.value);
-                    if (isNaN(limit) || limit < 1 || limit > 9999) { alert('Please enter a valid limit (1-9999).'); return; }
-                    updateBlynkPinValue(VPIN.CMD_SET_LIMIT, limit);
+                    if (isNaN(limit) || limit < 1 || limit > 9999) { showToast('Please enter a valid limit (1-9999).', 'error'); return; }
+                    sendCommandWithFeedback(DOMElements.setLimitBtn, VPIN.CMD_SET_LIMIT, limit, 'Volume limit updated.');
                 });
                 DOMElements.btnConnect.addEventListener('click', handleConnectionAttempt);
-                DOMElements.emergencyStopBtn.addEventListener('click', () => { if(confirm('Emergency Stop?')) updateBlynkPinValue(VPIN.CMD_POWER_RELAY, 0); });
+                DOMElements.emergencyStopBtn.addEventListener('click', () => { if(confirm('EMERGENCY STOP: This will power down the entire system. Are you sure?')) sendCommandWithFeedback(DOMElements.emergencyStopBtn, VPIN.CMD_POWER_RELAY, 0, 'Emergency stop initiated.'); });
             }
 
+            // --- Initial Page Load ---
             initializeGauge();
             setupEventListeners();
             lockSystemSafety('🛡️ System Offline', 'Press the button below to power on and connect to the device.', true);
@@ -454,4 +495,3 @@
     </script>
 </body>
 </html>
-

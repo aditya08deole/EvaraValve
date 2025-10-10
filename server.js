@@ -56,7 +56,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(PORT, () => {
-    console.log(`🚀 EvaraTap Server v5.1 (Simplified) is running on port ${PORT}`);
+    console.log(`🚀 EvaraTap Server v6.2 (Corrected Stop Logic) is running on port ${PORT}`);
     console.log('[INFO] Waiting for client to initiate connection...');
 });
 
@@ -153,7 +153,7 @@ app.post('/api/start-connection', async (req, res) => {
 
 /**
  * @api {post} /api/update-pin
- * @description A simplified endpoint to update a pin's value. Fire-and-forget.
+ * @description A simplified endpoint to update a pin's value. All commands are handled the same.
  */
 app.post('/api/update-pin', async (req, res) => {
     const { pin, value } = req.body;
@@ -163,16 +163,9 @@ app.post('/api/update-pin', async (req, res) => {
     }
     console.log(`[CMD] Received command: Set ${pin} = ${value}`);
 
-    // --- Special Handling for Emergency Stop ---
-    if (pin === POWER_RELAY_PIN && parseInt(value) === 0) {
-        console.log('[CMD] EMERGENCY STOP received. Halting polling loop.');
-        isPollingActive = false;
-        isDeviceOnline = false;
-        if (pollingTimeoutId) clearTimeout(pollingTimeoutId);
-        broadcastDataUpdate(); // Broadcast offline status immediately.
-    }
-
-    // --- Send the update command without waiting for confirmation ---
+    // This logic now correctly sends *any* command, including emergency stop,
+    // without altering the server's polling state. The polling loop will
+    // continue and detect the device going offline naturally.
     const updateResult = await callBlynkApi('update', `${pin}=${value}`);
     if (!updateResult) {
         console.error(`[CMD-FAIL] Blynk API call failed for ${pin}=${value}`);

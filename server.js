@@ -94,11 +94,15 @@ async function callBlynkApi(endpoint, params) {
 async function setRelayState(turnOn) {
     const value = turnOn ? 1 : 0;
     console.log(`[RELAY-CMD] Setting power relay state to ${turnOn ? 'ON' : 'OFF'} (v6=${value})`);
+    console.log(`[RELAY-CMD] API URL: ${BLYNK_API_BASE}/update?token=***&v6=${value}`);
+    
     const result = await callBlynkApi('update', `${POWER_RELAY_PIN}=${value}`);
+    
     if (!result) {
-        console.error(`[RELAY-FAIL] The API call to set relay state to ${value} failed.`);
+        console.error(`[RELAY-FAIL] ❌ The API call to set relay state to ${value} failed.`);
     } else {
         console.log(`[RELAY-SUCCESS] ✅ Relay command sent successfully: v6=${value}`);
+        console.log(`[RELAY-SUCCESS] Blynk should now trigger BLYNK_WRITE(V6) with value=${value}`);
     }
     return result;
 }
@@ -171,7 +175,9 @@ app.post('/api/update-pin', async (req, res) => {
     if (!pin || value === undefined) {
         return res.status(400).json({ error: 'Pin and value are required.' });
     }
+    console.log(`\n═══════════════════════════════════════════════════`);
     console.log(`[CMD] Received command: Set ${pin} = ${value}`);
+    console.log(`═══════════════════════════════════════════════════`);
 
     let updateResult;
 
@@ -179,25 +185,30 @@ app.post('/api/update-pin', async (req, res) => {
     if (pin === POWER_RELAY_PIN) {
         const turnOn = parseInt(value) === 1;
         
-        // *** CRITICAL FIX: If turning OFF the relay (emergency stop), stop polling AFTER command ***
         if (!turnOn) {
-            console.log('[EMERGENCY-STOP] Emergency stop requested. Sending OFF command first...');
+            console.log('🚨 [EMERGENCY-STOP] Emergency stop initiated!');
+            console.log('📡 [STEP 1] Keeping connection alive to deliver command...');
         }
         
         // Call the shared function to turn the relay ON or OFF
         updateResult = await setRelayState(turnOn);
         
-        // *** CRITICAL FIX: Stop polling and mark offline AFTER sending the OFF command ***
         if (!turnOn && updateResult) {
-            console.log('[EMERGENCY-STOP] Relay OFF command sent. Now stopping polling...');
+            console.log('✅ [STEP 2] OFF command sent to Blynk API successfully.');
+            console.log('⏳ [STEP 3] Waiting 3 seconds for ESP32 to process command...');
+            
+            // CRITICAL FIX: Wait for ESP32 to actually receive and process the command
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            console.log('🔌 [STEP 4] Now stopping polling and marking system offline...');
             isPollingActive = false;
             isDeviceOnline = false;
             if (pollingTimeoutId) {
                 clearTimeout(pollingTimeoutId);
                 pollingTimeoutId = null;
             }
-            // Broadcast the offline state to all clients
             broadcastDataUpdate();
+            console.log('🛑 [COMPLETE] Emergency stop sequence completed.\n');
         }
     } else {
         // For any other pin, send the command directly
@@ -211,6 +222,17 @@ app.post('/api/update-pin', async (req, res) => {
     
     console.log(`[CMD-SENT] ✅ Command ${pin}=${value} sent to Blynk.`);
     return res.status(200).json({ success: true, message: `Command sent: ${pin} set to ${value}.` });
+});
+
+// *** NEW: Test endpoint to verify relay state ***
+app.get('/api/test-relay', async (req, res) => {
+    console.log('[TEST] Testing relay OFF command...');
+    const result = await setRelayState(false);
+    if (result) {
+        return res.json({ success: true, message: 'Test OFF command sent successfully' });
+    } else {
+        return res.status(500).json({ success: false, message: 'Test OFF command failed' });
+    }
 });
 
 // ===================================================================================

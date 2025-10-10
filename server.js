@@ -56,7 +56,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(PORT, () => {
-    console.log(`🚀 EvaraTap Server v6.6 (Shared Relay Logic) is running on port ${PORT}`);
+    console.log(`🚀 EvaraTap Server v6.7 (Fixed Emergency Stop) is running on port ${PORT}`);
     console.log('[INFO] Waiting for client to initiate connection...');
 });
 
@@ -97,6 +97,8 @@ async function setRelayState(turnOn) {
     const result = await callBlynkApi('update', `${POWER_RELAY_PIN}=${value}`);
     if (!result) {
         console.error(`[RELAY-FAIL] The API call to set relay state to ${value} failed.`);
+    } else {
+        console.log(`[RELAY-SUCCESS] ✅ Relay command sent successfully: v6=${value}`);
     }
     return result;
 }
@@ -173,13 +175,32 @@ app.post('/api/update-pin', async (req, res) => {
 
     let updateResult;
 
-    // It checks if the command is for the power relay
+    // Check if the command is for the power relay
     if (pin === POWER_RELAY_PIN) {
         const turnOn = parseInt(value) === 1;
-        // It calls the SAME shared function to turn the relay ON or OFF
+        
+        // *** CRITICAL FIX: If turning OFF the relay (emergency stop), stop polling AFTER command ***
+        if (!turnOn) {
+            console.log('[EMERGENCY-STOP] Emergency stop requested. Sending OFF command first...');
+        }
+        
+        // Call the shared function to turn the relay ON or OFF
         updateResult = await setRelayState(turnOn);
+        
+        // *** CRITICAL FIX: Stop polling and mark offline AFTER sending the OFF command ***
+        if (!turnOn && updateResult) {
+            console.log('[EMERGENCY-STOP] Relay OFF command sent. Now stopping polling...');
+            isPollingActive = false;
+            isDeviceOnline = false;
+            if (pollingTimeoutId) {
+                clearTimeout(pollingTimeoutId);
+                pollingTimeoutId = null;
+            }
+            // Broadcast the offline state to all clients
+            broadcastDataUpdate();
+        }
     } else {
-        // For any other pin, it sends the command directly
+        // For any other pin, send the command directly
         updateResult = await callBlynkApi('update', `${pin}=${value}`);
     }
 
@@ -219,4 +240,3 @@ wss.on('connection', (ws) => {
     ws.on('close', () => console.log('[WSS] ❌ Client disconnected from WebSocket.'));
     ws.on('error', (error) => console.error('[WSS-ERROR] WebSocket client error:', error));
 });
-

@@ -56,7 +56,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(PORT, () => {
-    console.log(`🚀 EvaraTap Server v6.5 (Cleaned Logic) is running on port ${PORT}`);
+    console.log(`🚀 EvaraTap Server v6.6 (Shared Relay Logic) is running on port ${PORT}`);
     console.log('[INFO] Waiting for client to initiate connection...');
 });
 
@@ -148,6 +148,7 @@ app.post('/api/start-connection', async (req, res) => {
     }
     console.log('[API] Received request to start connection...');
     
+    // This calls the shared function to turn the relay ON
     const powerOnResult = await setRelayState(true);
 
     if (!powerOnResult) {
@@ -172,10 +173,13 @@ app.post('/api/update-pin', async (req, res) => {
 
     let updateResult;
 
+    // It checks if the command is for the power relay
     if (pin === POWER_RELAY_PIN) {
         const turnOn = parseInt(value) === 1;
+        // It calls the SAME shared function to turn the relay ON or OFF
         updateResult = await setRelayState(turnOn);
     } else {
+        // For any other pin, it sends the command directly
         updateResult = await callBlynkApi('update', `${pin}=${value}`);
     }
 

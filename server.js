@@ -56,7 +56,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(PORT, () => {
-    console.log(`🚀 EvaraTap Server v6.2 (Corrected Stop Logic) is running on port ${PORT}`);
+    console.log(`🚀 EvaraTap Server v6.3 (Debug Logging) is running on port ${PORT}`);
     console.log('[INFO] Waiting for client to initiate connection...');
 });
 
@@ -66,10 +66,25 @@ const wss = new WebSocketServer({ server });
 // --- BLYNK API HELPER ---
 // ===================================================================================
 
+/**
+ * A centralized and robust function for making GET requests to the Blynk API.
+ * This version includes enhanced logging for debugging.
+ * @param {string} endpoint - The specific API endpoint (e.g., 'get', 'update').
+ * @param {string} params - The query parameters for the request (e.g., 'v1&v2' or 'v6=1').
+ * @returns {Promise<object|null>} The JSON response from Blynk or null on failure.
+ */
 async function callBlynkApi(endpoint, params) {
     const url = `${BLYNK_API_BASE}/${endpoint}?token=${BLYNK_AUTH_TOKEN}&${params}`;
+    
+    // Create a version of the URL for logging that hides most of the token.
+    const displayUrl = `${BLYNK_API_BASE}/${endpoint}?token=${BLYNK_AUTH_TOKEN.substring(0,4)}...&${params}`;
+    console.log(`[API-CALL] Attempting to fetch: ${displayUrl}`);
+
     try {
         const response = await fetch(url);
+        // Log the response status immediately after the fetch completes.
+        console.log(`[API-CALL] Fetch completed for ${params} with status: ${response.status}`);
+
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`[API-ERROR] Blynk API Error on ${endpoint} (${response.status}):`, errorText);
@@ -80,10 +95,11 @@ async function callBlynkApi(endpoint, params) {
         }
         return response.json();
     } catch (error) {
-        console.error(`[API-ERROR] Network error calling Blynk API on ${endpoint}:`, error.message);
+        console.error(`[API-ERROR] Network error or exception during fetch for ${displayUrl}:`, error.message);
         return null;
     }
 }
+
 
 // ===================================================================================
 // --- CORE POLLING LOGIC ---
@@ -151,10 +167,6 @@ app.post('/api/start-connection', async (req, res) => {
     res.status(202).json({ success: true, message: 'Connection sequence initiated.' });
 });
 
-/**
- * @api {post} /api/update-pin
- * @description A simplified endpoint to update a pin's value. All commands are handled the same.
- */
 app.post('/api/update-pin', async (req, res) => {
     const { pin, value } = req.body;
 
@@ -163,16 +175,13 @@ app.post('/api/update-pin', async (req, res) => {
     }
     console.log(`[CMD] Received command: Set ${pin} = ${value}`);
 
-    // This logic now correctly sends *any* command, including emergency stop,
-    // without altering the server's polling state. The polling loop will
-    // continue and detect the device going offline naturally.
     const updateResult = await callBlynkApi('update', `${pin}=${value}`);
     if (!updateResult) {
         console.error(`[CMD-FAIL] Blynk API call failed for ${pin}=${value}`);
         return res.status(500).json({ success: false, error: 'Failed to send command to Blynk API.' });
     }
     
-    console.log(`[CMD-SENT] ✅ Command ${pin}=${value} sent successfully.`);
+    console.log(`[CMD-SENT] ✅ Command ${pin}=${value} sent to Blynk.`);
     return res.status(200).json({ success: true, message: `Command sent: ${pin} set to ${value}.` });
 });
 

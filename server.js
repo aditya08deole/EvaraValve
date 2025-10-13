@@ -16,8 +16,8 @@ const BLYNK_AUTH_TOKEN = process.env.BLYNK_AUTH_TOKEN;
 const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- Polling and Offline Detection Configuration ---
-const POLLING_RATE_MS = 2000;      // Poll every 2 seconds ONLY when a client is active.
-const STALE_POLL_THRESHOLD = 10;   // Mark device offline after 10 consecutive stale polls.
+const POLLING_RATE_MS = 1000;      // Poll every 2 seconds ONLY when a client is active.
+const STALE_POLL_THRESHOLD = 15;   // Mark device offline after 10 consecutive stale polls.
 
 // --- VIRTUAL PIN DEFINITIONS ---
 const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v4', 'v5', 'v6'];

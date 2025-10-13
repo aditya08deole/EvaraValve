@@ -56,7 +56,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(PORT, () => {
-    console.log(`🚀 EvaraTap Server v6.7 (Fixed Emergency Stop) is running on port ${PORT}`);
+    console.log(`🚀 EvaraTap Server v6.8 (Instant Stop Fix) is running on port ${PORT}`);
     console.log('[INFO] Waiting for client to initiate connection...');
 });
 
@@ -94,7 +94,6 @@ async function callBlynkApi(endpoint, params) {
 async function setRelayState(turnOn) {
     const value = turnOn ? 1 : 0;
     console.log(`[RELAY-CMD] Setting power relay state to ${turnOn ? 'ON' : 'OFF'} (v6=${value})`);
-    console.log(`[RELAY-CMD] API URL: ${BLYNK_API_BASE}/update?token=***&v6=${value}`);
     
     const result = await callBlynkApi('update', `${POWER_RELAY_PIN}=${value}`);
     
@@ -102,7 +101,6 @@ async function setRelayState(turnOn) {
         console.error(`[RELAY-FAIL] ❌ The API call to set relay state to ${value} failed.`);
     } else {
         console.log(`[RELAY-SUCCESS] ✅ Relay command sent successfully: v6=${value}`);
-        console.log(`[RELAY-SUCCESS] Blynk should now trigger BLYNK_WRITE(V6) with value=${value}`);
     }
     return result;
 }
@@ -154,7 +152,6 @@ app.post('/api/start-connection', async (req, res) => {
     }
     console.log('[API] Received request to start connection...');
     
-    // This calls the shared function to turn the relay ON
     const powerOnResult = await setRelayState(true);
 
     if (!powerOnResult) {
@@ -181,33 +178,30 @@ app.post('/api/update-pin', async (req, res) => {
 
     let updateResult;
 
-    // Check if the command is for the power relay
     if (pin === POWER_RELAY_PIN) {
         const turnOn = parseInt(value) === 1;
         
         if (!turnOn) {
             console.log('🚨 [EMERGENCY-STOP] Emergency stop initiated!');
-            console.log('📡 [STEP 1] Keeping connection alive to deliver command...');
         }
         
         // Call the shared function to turn the relay ON or OFF
         updateResult = await setRelayState(turnOn);
         
+        // If the command was to turn OFF and it was successful...
         if (!turnOn && updateResult) {
-            console.log('✅ [STEP 2] OFF command sent to Blynk API successfully.');
-            console.log('⏳ [STEP 3] Waiting 3 seconds for ESP32 to process command...');
+            console.log('✅ [STOP-ACTION] OFF command sent successfully.');
+            console.log('🔌 [STOP-ACTION] Stopping server-side polling immediately.');
             
-            // CRITICAL FIX: Wait for ESP32 to actually receive and process the command
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            console.log('🔌 [STEP 4] Now stopping polling and marking system offline...');
+            // --- ✅ FIXED LOGIC ---
+            // Stop polling IMMEDIATELY. Do not wait. The command has been sent.
             isPollingActive = false;
             isDeviceOnline = false;
             if (pollingTimeoutId) {
                 clearTimeout(pollingTimeoutId);
                 pollingTimeoutId = null;
             }
-            broadcastDataUpdate();
+            broadcastDataUpdate(); // Inform the client the device is now considered offline
             console.log('🛑 [COMPLETE] Emergency stop sequence completed.\n');
         }
     } else {
@@ -224,7 +218,6 @@ app.post('/api/update-pin', async (req, res) => {
     return res.status(200).json({ success: true, message: `Command sent: ${pin} set to ${value}.` });
 });
 
-// *** NEW: Test endpoint to verify relay state ***
 app.get('/api/test-relay', async (req, res) => {
     console.log('[TEST] Testing relay OFF command...');
     const result = await setRelayState(false);

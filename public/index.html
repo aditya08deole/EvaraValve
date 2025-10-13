@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvaraValve Smart Flow Control v7.1 (Fixed Emergency Stop)</title>
+    <title>EvaraValve Smart Flow Control v7.3 (Robust Safety)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* EvaraTap Dashboard Styles - v7.1 (Fixed Emergency Stop) */
+        /* EvaraTap Dashboard Styles - v7.3 (Robust Safety) */
         :root {
             --primary-color: #00c6ff; --secondary-color: #f0f8ff;
             --success-color: #2ecc71; --danger-color: #e74c3c;
@@ -74,7 +74,6 @@
         .btn:disabled { background: #576574; cursor: not-allowed; opacity: 0.6; }
         .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 7px 10px rgba(0,0,0,0.3); }
 
-        /* Button pending state */
         .btn .btn-text { transition: opacity 0.2s ease; }
         .btn .spinner {
             position: absolute; top: 50%; left: 50%;
@@ -149,7 +148,6 @@
         .btn-connect:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(46, 204, 113, 0.6); }
         .btn-connect:disabled { background: #576574; cursor: not-allowed; opacity: 0.7; }
 
-        /* Toast Notification Styles */
         #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
         .toast {
             padding: 12px 20px; border-radius: 8px; font-weight: 600;
@@ -164,7 +162,30 @@
         @keyframes slideIn { to { opacity: 1; transform: translateX(0); } }
         @keyframes slideOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
         
-        /* Mobile Responsiveness */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 20, 30, 0.7); backdrop-filter: blur(8px);
+            z-index: 1500; display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .modal-overlay.visible { opacity: 1; pointer-events: auto; }
+        .modal-content {
+            background: rgba(20, 35, 51, 0.85); border-radius: 16px;
+            padding: 30px; text-align: center; max-width: 400px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            transform: scale(0.95); transition: transform 0.3s ease;
+        }
+        .modal-overlay.visible .modal-content { transform: scale(1); }
+        .modal-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 15px; color: var(--danger-color); }
+        .modal-body { font-size: 1rem; color: #bdc3c7; line-height: 1.6; margin-bottom: 25px; }
+        .modal-actions { display: flex; gap: 15px; justify-content: center; }
+        .modal-btn { padding: 12px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border: none; }
+        .modal-btn-confirm { background-color: var(--danger-color); color: white; }
+        .modal-btn-confirm:hover { background-color: #c03b2b; }
+        .modal-btn-cancel { background-color: #576574; color: white; }
+        .modal-btn-cancel:hover { background-color: #485460; }
+
         @media (max-width: 900px) {
             .dashboard { grid-template-columns: 1fr; gap: 20px; }
         }
@@ -182,7 +203,6 @@
                 left: 15px;
             }
         }
-
     </style>
 </head>
 <body>
@@ -192,6 +212,17 @@
     </video>
     
     <div id="toast-container"></div>
+
+    <div class="modal-overlay" id="confirmModalOverlay">
+        <div class="modal-content">
+            <h3 class="modal-title" id="modalTitle">Confirm Action</h3>
+            <p class="modal-body" id="modalBody">Are you sure?</p>
+            <div class="modal-actions">
+                <button class="modal-btn modal-btn-cancel" id="modalCancelBtn">Cancel</button>
+                <button class="modal-btn modal-btn-confirm" id="modalConfirmBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
 
     <button class="btn emergency-stop-btn" id="emergencyStopBtn">
         <span class="btn-text">
@@ -282,7 +313,7 @@
     </div>
     
     <script>
-        // EvaraTap Dashboard Logic - v7.1 (Fixed Emergency Stop)
+        // EvaraTap Dashboard Logic - v7.3 (Robust Safety)
         document.addEventListener('DOMContentLoaded', () => {
 
             const VPIN = {
@@ -309,16 +340,22 @@
                 offlineOverlay: document.getElementById('offlineOverlay'),
                 btnConnect: document.getElementById('btnConnect'), 
                 emergencyStopBtn: document.getElementById('emergencyStopBtn'),
-                toastContainer: document.getElementById('toast-container')
+                toastContainer: document.getElementById('toast-container'),
+                confirmModalOverlay: document.getElementById('confirmModalOverlay'),
+                modalTitle: document.getElementById('modalTitle'),
+                modalBody: document.getElementById('modalBody'),
+                modalConfirmBtn: document.getElementById('modalConfirmBtn'),
+                modalCancelBtn: document.getElementById('modalCancelBtn')
             };
 
             let socket, volumeChart = null;
             let connectionTimeout = null;
+            let confirmCallback = null;
 
             function connectWebSocket() {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const host = window.location.host;
-                socket = new WebSocket(`${protocol}//${host}/ws`);
+                socket = new WebSocket(`${protocol}//${host}`);
                 
                 socket.onopen = () => console.log('✅ WebSocket connected.');
                 
@@ -465,6 +502,18 @@
                 }
             }
             
+            function showConfirmationModal(title, body, onConfirm) {
+                DOMElements.modalTitle.textContent = title;
+                DOMElements.modalBody.innerHTML = body;
+                confirmCallback = onConfirm;
+                DOMElements.confirmModalOverlay.classList.add('visible');
+            }
+
+            function hideConfirmationModal() {
+                DOMElements.confirmModalOverlay.classList.remove('visible');
+                confirmCallback = null;
+            }
+
             function showToast(message, type = 'success') {
                 const toast = document.createElement('div');
                 toast.className = `toast ${type}`;
@@ -494,16 +543,42 @@
             function setupEventListeners() {
                 DOMElements.openBtn.addEventListener('click', () => sendCommandWithFeedback(DOMElements.openBtn, VPIN.CMD_OPEN_VALVE, 1, 'Valve open command sent.'));
                 DOMElements.closeBtn.addEventListener('click', () => sendCommandWithFeedback(DOMElements.closeBtn, VPIN.CMD_CLOSE_VALVE, 1, 'Valve close command sent.'));
-                DOMElements.resetVolumeBtn.addEventListener('click', () => { if(confirm('Are you sure you want to reset the total volume?')) sendCommandWithFeedback(DOMElements.resetVolumeBtn, VPIN.CMD_RESET_VOLUME, 1, 'Volume reset command sent.'); });
+                
+                DOMElements.resetVolumeBtn.addEventListener('click', () => {
+                    showConfirmationModal(
+                        'Reset Volume', 
+                        'Are you sure you want to reset the total volume counter to zero?', 
+                        () => sendCommandWithFeedback(DOMElements.resetVolumeBtn, VPIN.CMD_RESET_VOLUME, 1, 'Volume reset command sent.')
+                    );
+                });
+
                 DOMElements.setLimitBtn.addEventListener('click', () => {
                     const limit = parseFloat(DOMElements.volumeLimitInput.value);
                     if (isNaN(limit) || limit < 1 || limit > 9999) { showToast('Please enter a valid limit (1-9999).', 'error'); return; }
                     sendCommandWithFeedback(DOMElements.setLimitBtn, VPIN.CMD_SET_LIMIT, limit, 'Volume limit updated.');
                 });
+                
                 DOMElements.btnConnect.addEventListener('click', handleConnectionAttempt);
+                
                 DOMElements.emergencyStopBtn.addEventListener('click', () => { 
-                    if(confirm('⚠️ EMERGENCY STOP: This will immediately power down the entire system and cut power to the relay. Are you absolutely sure?')) {
-                        sendCommandWithFeedback(DOMElements.emergencyStopBtn, VPIN.CMD_POWER_RELAY, 0, 'Emergency stop executed! System powered down.');
+                    showConfirmationModal(
+                        '⚠️ EMERGENCY STOP', 
+                        'This will immediately power down the entire system and cut power to the relay. <strong>This action is irreversible.</strong><br/><br/>Are you absolutely sure?', 
+                        () => sendCommandWithFeedback(DOMElements.emergencyStopBtn, VPIN.CMD_POWER_RELAY, 0, 'Emergency stop executed! System powered down.')
+                    );
+                });
+
+                // --- NEW: Modal Event Listeners ---
+                DOMElements.modalConfirmBtn.addEventListener('click', () => {
+                    if (typeof confirmCallback === 'function') {
+                        confirmCallback();
+                    }
+                    hideConfirmationModal();
+                });
+                DOMElements.modalCancelBtn.addEventListener('click', hideConfirmationModal);
+                DOMElements.confirmModalOverlay.addEventListener('click', (event) => {
+                    if (event.target === DOMElements.confirmModalOverlay) {
+                        hideConfirmationModal();
                     }
                 });
             }

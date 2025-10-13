@@ -21,8 +21,9 @@ const STALE_POLL_THRESHOLD = 10;   // Mark device offline after 10 consecutive s
 
 // --- VIRTUAL PIN DEFINITIONS ---
 const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v4', 'v5', 'v6'];
-const UPTIME_PIN = 'v5';           // Device heartbeat pin (e.g., seconds since boot).
-const POWER_RELAY_PIN = 'v6';      // Pin controlling the main power to the ESP32 system.
+const UPTIME_PIN = 'v5';
+const POWER_RELAY_PIN = 'v6';
+const CMD_CLOSE_VALVE_PIN = 'v11'; // Pin to send the close command
 
 // ===================================================================================
 // --- STATE MANAGEMENT ---
@@ -56,7 +57,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(PORT, () => {
-    console.log(`🚀 EvaraTap Server v6.8 (Instant Stop Fix) is running on port ${PORT}`);
+    console.log(`🚀 EvaraTap Server v7.4 (Enhanced Safety) is running on port ${PORT}`);
     console.log('[INFO] Waiting for client to initiate connection...');
 });
 
@@ -85,12 +86,6 @@ async function callBlynkApi(endpoint, params) {
     }
 }
 
-/**
- * A dedicated function to control the power relay.
- * This is the single source of truth for turning the relay ON or OFF.
- * @param {boolean} turnOn - True to turn the relay ON (v6=1), false to turn it OFF (v6=0).
- * @returns {Promise<object|null>} The result from the Blynk API call.
- */
 async function setRelayState(turnOn) {
     const value = turnOn ? 1 : 0;
     console.log(`[RELAY-CMD] Setting power relay state to ${turnOn ? 'ON' : 'OFF'} (v6=${value})`);
@@ -115,6 +110,7 @@ const pollBlynkData = async () => {
     }
     const pinParams = VIRTUAL_PINS_TO_POLL.join('&');
     const newData = await callBlynkApi('get', pinParams);
+
     if (!newData) {
         consecutiveStalePolls++;
     } else {
@@ -122,23 +118,48 @@ const pollBlynkData = async () => {
         if (lastUptimeValue === currentUptime && isDeviceOnline) {
             consecutiveStalePolls++;
         } else {
-            if (!isDeviceOnline) console.info('✅ [STATUS] Fresh data detected! ESP32 is now ONLINE.');
+            const wasPreviouslyOffline = !isDeviceOnline;
+
+            if (wasPreviouslyOffline) {
+                console.info('✅ [STATUS] Fresh data detected! ESP32 is now ONLINE.');
+            }
+
             isDeviceOnline = true;
             consecutiveStalePolls = 0;
             lastUptimeValue = currentUptime;
             deviceDataCache = newData;
-            broadcastDataUpdate();
+            
+            broadcastDataUpdate(); // Inform UI that device is online
+
+            // --- NEW: Safety logic for when device first comes online ---
+            if (wasPreviouslyOffline) {
+                console.log(`[SAFETY] Device just connected. Sending command to ensure valve is closed.`);
+                await callBlynkApi('update', `${CMD_CLOSE_VALVE_PIN}=1`);
+            }
         }
     }
+
+    // --- SAFETY SHUTDOWN LOGIC ---
     if (consecutiveStalePolls >= STALE_POLL_THRESHOLD) {
         console.warn(`🚨 [STATUS] OFFLINE: Stale data threshold reached.`);
         isDeviceOnline = false;
         isPollingActive = false;
         broadcastDataUpdate();
-        console.log(`[SAFETY] Triggering safety shutdown.`);
-        await setRelayState(false); // Use the dedicated function for safety shutdown
-        return;
+
+        console.log('[SAFETY] Initiating graceful shutdown sequence...');
+        
+        console.log(`[SAFETY] Step 1: Sending close valve command (${CMD_CLOSE_VALVE_PIN}=1)...`);
+        await callBlynkApi('update', `${CMD_CLOSE_VALVE_PIN}=1`);
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        console.log('[SAFETY] Step 2: Sending power-off command to main relay...');
+        await setRelayState(false);
+        
+        console.log('🛑 [SAFETY] Shutdown sequence complete.');
+        return; // Stop polling
     }
+
     pollingTimeoutId = setTimeout(pollBlynkData, POLLING_RATE_MS);
 };
 
@@ -172,9 +193,7 @@ app.post('/api/update-pin', async (req, res) => {
     if (!pin || value === undefined) {
         return res.status(400).json({ error: 'Pin and value are required.' });
     }
-    console.log(`\n═══════════════════════════════════════════════════`);
-    console.log(`[CMD] Received command: Set ${pin} = ${value}`);
-    console.log(`═══════════════════════════════════════════════════`);
+    console.log(`\n[CMD] Received command: Set ${pin} = ${value}`);
 
     let updateResult;
 
@@ -185,27 +204,20 @@ app.post('/api/update-pin', async (req, res) => {
             console.log('🚨 [EMERGENCY-STOP] Emergency stop initiated!');
         }
         
-        // Call the shared function to turn the relay ON or OFF
         updateResult = await setRelayState(turnOn);
         
-        // If the command was to turn OFF and it was successful...
         if (!turnOn && updateResult) {
-            console.log('✅ [STOP-ACTION] OFF command sent successfully.');
             console.log('🔌 [STOP-ACTION] Stopping server-side polling immediately.');
-            
-            // --- ✅ FIXED LOGIC ---
-            // Stop polling IMMEDIATELY. Do not wait. The command has been sent.
             isPollingActive = false;
             isDeviceOnline = false;
             if (pollingTimeoutId) {
                 clearTimeout(pollingTimeoutId);
                 pollingTimeoutId = null;
             }
-            broadcastDataUpdate(); // Inform the client the device is now considered offline
-            console.log('🛑 [COMPLETE] Emergency stop sequence completed.\n');
+            broadcastDataUpdate();
+            console.log('🛑 [COMPLETE] Emergency stop sequence completed.');
         }
     } else {
-        // For any other pin, send the command directly
         updateResult = await callBlynkApi('update', `${pin}=${value}`);
     }
 
@@ -216,16 +228,6 @@ app.post('/api/update-pin', async (req, res) => {
     
     console.log(`[CMD-SENT] ✅ Command ${pin}=${value} sent to Blynk.`);
     return res.status(200).json({ success: true, message: `Command sent: ${pin} set to ${value}.` });
-});
-
-app.get('/api/test-relay', async (req, res) => {
-    console.log('[TEST] Testing relay OFF command...');
-    const result = await setRelayState(false);
-    if (result) {
-        return res.json({ success: true, message: 'Test OFF command sent successfully' });
-    } else {
-        return res.status(500).json({ success: false, message: 'Test OFF command failed' });
-    }
 });
 
 // ===================================================================================
@@ -255,3 +257,4 @@ wss.on('connection', (ws) => {
     ws.on('close', () => console.log('[WSS] ❌ Client disconnected from WebSocket.'));
     ws.on('error', (error) => console.error('[WSS-ERROR] WebSocket client error:', error));
 });
+

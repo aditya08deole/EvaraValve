@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvaraValve Smart Flow Control v7.3 (Robust Safety)</title>
+    <title>EvaraValve Smart Flow Control v8.0 (Active/Standby)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* EvaraTap Dashboard Styles - v7.3 (Robust Safety) */
+        /* EvaraTap Dashboard Styles - v8.0 (Active/Standby) */
         :root {
             --primary-color: #00c6ff; --secondary-color: #f0f8ff;
             --success-color: #2ecc71; --danger-color: #e74c3c;
@@ -234,10 +234,10 @@
     
     <div class="safety-lockdown-overlay">
         <div class="lockdown-message">
-             🛡️ System Offline<small>Press the button below to power on and connect to the device.</small>
+             🛡️ System in Standby<small>Press the button below to activate the device and begin a session.</small>
         </div>
         <button class="btn-connect" id="btnConnect">
-            ⚡ Connect to Device
+            ⚡ Activate Device
         </button>
     </div>
 
@@ -252,7 +252,7 @@
                 <div class="offline-overlay" id="offlineOverlay">
                     <div class="offline-icon">🔌</div>
                     <div class="offline-title">Device Offline</div>
-                    <div class="offline-message">The device is not responding. Use the main connect button to re-establish connection.</div>
+                    <div class="offline-message">The device is not responding. Use the main activate button to re-establish connection.</div>
                 </div>
                 
                 <div class="device-status-indicator offline" id="deviceStatus">OFFLINE</div>
@@ -313,16 +313,18 @@
     </div>
     
     <script>
-        // EvaraTap Dashboard Logic - v7.3 (Robust Safety)
+        // EvaraTap Dashboard Logic - v8.0 (Active/Standby)
         document.addEventListener('DOMContentLoaded', () => {
 
+            // --- VIRTUAL PIN MAPPING ---
             const VPIN = {
                 TOTAL_VOLUME: 'v0', FLOW_RATE: 'v1', VALVE_STATUS: 'v2',
-                VOLUME_LIMIT: 'v4', CMD_POWER_RELAY: 'v6',
+                VOLUME_LIMIT: 'v4', CMD_ENABLE_HEARTBEAT: 'v6', // <-- UPDATED for v8.0
                 CMD_OPEN_VALVE: 'v10', CMD_CLOSE_VALVE: 'v11',
                 CMD_RESET_VOLUME: 'v12', CMD_SET_LIMIT: 'v13'
             };
             
+            // --- DOM ELEMENT CACHE ---
             const DOMElements = {
                 deviceStatus: document.getElementById('deviceStatus'), 
                 flowRate: document.getElementById('flowRate'),
@@ -382,7 +384,7 @@
             }
 
             async function handleConnectionAttempt() {
-                lockSystemForConnection('⚡ Powering On...', 'Attempting to establish a connection with the device.');
+                lockSystemForConnection('⚡ Activating...', 'Sending command to wake the device.');
                 try {
                     const response = await fetch('/api/start-connection', { method: 'POST' });
                     if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
@@ -390,16 +392,17 @@
                     connectionTimeout = setTimeout(() => {
                         showToast('Connection attempt timed out. Please try again.', 'error');
                         updateDeviceOnlineStatus(false);
-                    }, 20000);
+                    }, 20000); // 20-second timeout for the device to come online
 
                 } catch (error) {
                     console.error('Failed to start connection sequence:', error);
-                    showToast('Failed to send connection command. Check server.', 'error');
+                    showToast('Failed to send activation command. Check server.', 'error');
                     updateDeviceOnlineStatus(false);
                 }
             }
             
             function updateDeviceOnlineStatus(isOnline) {
+                // Clear any pending state on buttons
                 document.querySelectorAll('.btn.pending').forEach(btn => {
                     btn.classList.remove('pending');
                     btn.disabled = false;
@@ -414,13 +417,14 @@
                     DOMElements.analyticsCard.style.pointerEvents = 'auto';
                     DOMElements.emergencyStopBtn.classList.add('visible');
                 } else {
-                    lockSystemSafety('🛡️ System Offline', 'Press the button below to power on and connect to the device.', true);
+                    lockSystemSafety('🛡️ System in Standby', 'Press the button below to activate the device and begin a session.', true);
                     DOMElements.deviceStatus.textContent = 'OFFLINE';
                     DOMElements.deviceStatus.className = 'device-status-indicator offline';
                     DOMElements.offlineOverlay.classList.add('show');
                     DOMElements.analyticsCard.style.opacity = '0.5';
                     DOMElements.analyticsCard.style.pointerEvents = 'none';
                     DOMElements.emergencyStopBtn.classList.remove('visible');
+                    // Reset UI to default values
                     DOMElements.flowRate.textContent = '--.--';
                     DOMElements.valveStatus.textContent = 'UNKNOWN';
                     DOMElements.valveStatus.className = 'status-value';
@@ -432,7 +436,7 @@
                 DOMElements.lockdownMessage.innerHTML = `${title}<small>${subtitle}</small>`;
                 DOMElements.btnConnect.style.display = showConnectButton ? 'inline-flex' : 'none';
                 DOMElements.btnConnect.disabled = false;
-                DOMElements.btnConnect.innerHTML = `⚡ Connect to Device`;
+                DOMElements.btnConnect.innerHTML = `⚡ Activate Device`;
             }
 
             function lockSystemForConnection(title, subtitle) {
@@ -497,6 +501,7 @@
                 } catch (error) {
                     console.error("Command failed:", error);
                     showToast(error.message, 'error');
+                    // Only re-enable the button on failure. On success, the state will be updated by the websocket.
                     buttonEl.classList.remove('pending');
                     buttonEl.disabled = false;
                 }
@@ -562,13 +567,13 @@
                 
                 DOMElements.emergencyStopBtn.addEventListener('click', () => { 
                     showConfirmationModal(
-                        '⚠️ EMERGENCY STOP', 
-                        'This will immediately power down the entire system and cut power to the relay. <strong>This action is irreversible.</strong><br/><br/>Are you absolutely sure?', 
-                        () => sendCommandWithFeedback(DOMElements.emergencyStopBtn, VPIN.CMD_POWER_RELAY, 0, 'Emergency stop executed! System powered down.')
+                        '⚠️ Enter Standby Mode?', 
+                        'This will command the device to close its valve and stop sending data, taking the system offline for safety. <br/><br/>Are you sure you want to end the session?', 
+                        () => sendCommandWithFeedback(DOMElements.emergencyStopBtn, VPIN.CMD_ENABLE_HEARTBEAT, 0, 'Standby command sent. System will go offline.')
                     );
                 });
 
-                // --- NEW: Modal Event Listeners ---
+                // --- Modal Event Listeners ---
                 DOMElements.modalConfirmBtn.addEventListener('click', () => {
                     if (typeof confirmCallback === 'function') {
                         confirmCallback();
@@ -583,9 +588,10 @@
                 });
             }
 
+            // --- Initialise Application ---
             initializeGauge();
             setupEventListeners();
-            lockSystemSafety('🛡️ System Offline', 'Press the button below to power on and connect to the device.', true);
+            lockSystemSafety('🛡️ System in Standby', 'Press the button below to activate the device and begin a session.', true);
             connectWebSocket();
         });
     </script>

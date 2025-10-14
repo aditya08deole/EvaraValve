@@ -17,7 +17,7 @@ const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- Polling and Offline Detection Configuration ---
 const POLLING_RATE_MS = 1000;      // Poll every 2 seconds ONLY when a client is active.
-const STALE_POLL_THRESHOLD = 20;   // Mark device offline after 10 consecutive stale polls.
+const STALE_POLL_THRESHOLD = 30;   // Mark device offline after 10 consecutive stale polls.
 
 // --- VIRTUAL PIN DEFINITIONS (v8.0 Update) ---
 const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v4', 'v5', 'v6'];

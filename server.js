@@ -17,8 +17,8 @@ const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- Polling and Offline Detection Configuration ---
 // MODIFIED: Polling rate is faster for a more responsive UI
-const POLLING_RATE_MS = 1000;
-const STALE_POLL_THRESHOLD = 20;
+const POLLING_RATE_MS = 500;
+const STALE_POLL_THRESHOLD = 40;
 
 // --- VIRTUAL PIN DEFINITIONS (v8.0 Update) ---
 // MODIFIED: v6 is write-only from the server, so no need to poll it.

@@ -17,7 +17,7 @@ const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- Polling and Offline Detection Configuration ---
 const POLLING_RATE_MS = 250;
-const STALE_POLL_THRESHOLD = 40; // 40 * 250ms = 10 second offline detection
+const STALE_POLL_THRESHOLD = 100; // 40 * 250ms = 10 second offline detection
 
 // --- VIRTUAL PIN DEFINITIONS (v8.9-fix) ---
 const VPIN_TOTAL_VOLUME = 'v0';

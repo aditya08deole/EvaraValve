@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvaraValve Smart Flow Control v8.9-fast (Optimistic)</title>
+    <title>EvaraValve Smart Flow Control v9.0 (Failsafe)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -402,10 +402,10 @@
             }
             
             function updateDeviceOnlineStatus(isOnline) {
-                document.querySelectorAll('.btn.pending').forEach(btn => {
-                    btn.classList.remove('pending');
-                    btn.disabled = false;
-                });
+                // MODIFIED v9.0: We remove the spinner removal from here
+                // It was causing a bug where a spinner would be removed by an unrelated
+                // online/offline event. Spinners are now *only* handled by sendCommandWithFeedback
+                // and updateUI.
 
                 if (isOnline) {
                     unlockSystemSafety();
@@ -464,13 +464,19 @@
                 if (data[VPIN.VALVE_STATUS] !== undefined) {
                     const isOpen = parseInt(data[VPIN.VALVE_STATUS]) === 1;
                     
-                    // Only update if the button is not spinning
-                    // This prevents the optimistic UI from being "corrected" by a slightly delayed packet
-                    if (!DOMElements.openBtn.classList.contains('pending') && !DOMElements.closeBtn.classList.contains('pending')) {
-                        DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
-                        DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
-                        DOMElements.openBtn.disabled = isOpen || isLimitReached;
-                        DOMElements.closeBtn.disabled = !isOpen;
+                    // This is the "real" state. We update our UI to match.
+                    DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
+                    DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
+                    DOMElements.openBtn.disabled = isOpen || isLimitReached;
+                    DOMElements.closeBtn.disabled = !isOpen;
+                    
+                    // MODIFIED v9.0: If the "real" state has been updated,
+                    // we can safely remove any spinners. This is our
+                    // "confirmation" that the optimistic UI is now correct.
+                    if (isOpen) {
+                        DOMElements.openBtn.classList.remove('pending');
+                    } else {
+                        DOMElements.closeBtn.classList.remove('pending');
                     }
                 }
                 if (data[VPIN.VOLUME_LIMIT] !== undefined) {
@@ -501,23 +507,26 @@
                     }
                     
                     showToast(successMessage || result.message, 'success');
+                    
+                    // MODIFIED v9.0: This is the fix for the "long buffer"
+                    // We remove the spinner *immediately* on success.
+                    // The "Optimistic UI" has already changed the text.
+                    // The server's enforcer will handle retries.
+                    // This makes the button feel instant.
+                    buttonEl.classList.remove('pending');
 
                 } catch (error) {
                     console.error("Command failed:", error);
                     showToast(error.message, 'error');
                     
-                    // MODIFIED v8.9-fast: Error handling for optimistic UI
-                    // If the command fails, we need to revert the UI.
-                    // The safest way is to just request the latest data, which will fix the UI.
-                    // But for now, we just re-enable the button. The *next* data packet will fix the state.
+                    // On error, we also remove the spinner.
                     buttonEl.classList.remove('pending');
-                    // We don't know what state to revert to, so we leave the button disabled
-                    // The State Enforcer on the server will fix this.
-                    // A better way is to re-read the state, but we'll let the poller handle it.
-                    // For now, just remove the pending class. The next poll will fix the buttons.
                     
-                    // Let's just remove pending. The next updateUI will fix button state.
-                    buttonEl.classList.remove('pending');
+                    // Important: We DON'T know the state, so we disable *both*
+                    // buttons until the next updateUI() call tells us the
+                    // real state.
+                    DOMElements.openBtn.disabled = true;
+                    DOMElements.closeBtn.disabled = true;
                 }
             }
             
@@ -576,7 +585,6 @@
             }
             
             function setupEventListeners() {
-                // MODIFIED v8.9-fast: Implement Optimistic UI
                 DOMElements.openBtn.addEventListener('click', () => {
                     const totalVolume = parseFloat(localDeviceDataCache[VPIN.TOTAL_VOLUME] || 0);
                     const volumeLimit = parseFloat(localDeviceDataCache[VPIN.VOLUME_LIMIT] || 0);
@@ -596,7 +604,6 @@
                     sendCommandWithFeedback(DOMElements.openBtn, VPIN.CMD_OPEN_VALVE, 1, 'Valve open command sent.');
                 });
                 
-                // MODIFIED v8.9-fast: Implement Optimistic UI
                 DOMElements.closeBtn.addEventListener('click', () => {
                     // --- Optimistic Update ---
                     DOMElements.valveStatus.textContent = 'CLOSED';

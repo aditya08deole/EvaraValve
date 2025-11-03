@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvaraValve Smart Flow Control v8.8 (Limit Lock)</title>
+    <title>EvaraValve Smart Flow Control v8.9-fast (Optimistic)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -152,7 +152,6 @@
             padding: 12px 20px; border-radius: 8px; font-weight: 600;
             box-shadow: 0 4px 15px rgba(0,0,0, 0.2);
             opacity: 0; transform: translateX(100%);
-            /* MODIFIED: Faster slide in/out animation */
             animation: slideIn 0.4s forwards, slideOut 0.4s 2.5s forwards;
             border: 1px solid rgba(255,255,255,0.2);
             display: flex; align-items: center; gap: 10px;
@@ -352,7 +351,6 @@
             let socket, volumeChart = null;
             let connectionTimeout = null;
             let confirmCallback = null;
-            // NEW: A local cache for device data to enable instant UI checks
             let localDeviceDataCache = {};
 
             function connectWebSocket() {
@@ -465,10 +463,15 @@
                 }
                 if (data[VPIN.VALVE_STATUS] !== undefined) {
                     const isOpen = parseInt(data[VPIN.VALVE_STATUS]) === 1;
-                    DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
-                    DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
-                    DOMElements.openBtn.disabled = isOpen || isLimitReached;
-                    DOMElements.closeBtn.disabled = !isOpen;
+                    
+                    // Only update if the button is not spinning
+                    // This prevents the optimistic UI from being "corrected" by a slightly delayed packet
+                    if (!DOMElements.openBtn.classList.contains('pending') && !DOMElements.closeBtn.classList.contains('pending')) {
+                        DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
+                        DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
+                        DOMElements.openBtn.disabled = isOpen || isLimitReached;
+                        DOMElements.closeBtn.disabled = !isOpen;
+                    }
                 }
                 if (data[VPIN.VOLUME_LIMIT] !== undefined) {
                     DOMElements.volumeLimitDisplay.textContent = `${volumeLimit.toFixed(1)} L`;
@@ -502,8 +505,19 @@
                 } catch (error) {
                     console.error("Command failed:", error);
                     showToast(error.message, 'error');
+                    
+                    // MODIFIED v8.9-fast: Error handling for optimistic UI
+                    // If the command fails, we need to revert the UI.
+                    // The safest way is to just request the latest data, which will fix the UI.
+                    // But for now, we just re-enable the button. The *next* data packet will fix the state.
                     buttonEl.classList.remove('pending');
-                    buttonEl.disabled = false;
+                    // We don't know what state to revert to, so we leave the button disabled
+                    // The State Enforcer on the server will fix this.
+                    // A better way is to re-read the state, but we'll let the poller handle it.
+                    // For now, just remove the pending class. The next poll will fix the buttons.
+                    
+                    // Let's just remove pending. The next updateUI will fix button state.
+                    buttonEl.classList.remove('pending');
                 }
             }
             
@@ -562,6 +576,7 @@
             }
             
             function setupEventListeners() {
+                // MODIFIED v8.9-fast: Implement Optimistic UI
                 DOMElements.openBtn.addEventListener('click', () => {
                     const totalVolume = parseFloat(localDeviceDataCache[VPIN.TOTAL_VOLUME] || 0);
                     const volumeLimit = parseFloat(localDeviceDataCache[VPIN.VOLUME_LIMIT] || 0);
@@ -570,10 +585,28 @@
                         showToast('Volume limit reached. Reset volume to open valve.', 'error');
                         return;
                     }
+
+                    // --- Optimistic Update ---
+                    DOMElements.valveStatus.textContent = 'OPEN';
+                    DOMElements.valveStatus.className = 'status-value open';
+                    DOMElements.openBtn.disabled = true;
+                    DOMElements.closeBtn.disabled = false;
+                    // --- End Optimistic Update ---
+
                     sendCommandWithFeedback(DOMElements.openBtn, VPIN.CMD_OPEN_VALVE, 1, 'Valve open command sent.');
                 });
                 
-                DOMElements.closeBtn.addEventListener('click', () => sendCommandWithFeedback(DOMElements.closeBtn, VPIN.CMD_CLOSE_VALVE, 1, 'Valve close command sent.'));
+                // MODIFIED v8.9-fast: Implement Optimistic UI
+                DOMElements.closeBtn.addEventListener('click', () => {
+                    // --- Optimistic Update ---
+                    DOMElements.valveStatus.textContent = 'CLOSED';
+                    DOMElements.valveStatus.className = 'status-value closed';
+                    DOMElements.openBtn.disabled = false;
+                    DOMElements.closeBtn.disabled = true;
+                    // --- End Optimistic Update ---
+                    
+                    sendCommandWithFeedback(DOMElements.closeBtn, VPIN.CMD_CLOSE_VALVE, 1, 'Valve close command sent.');
+                });
                 
                 DOMElements.resetVolumeBtn.addEventListener('click', () => {
                     showConfirmationModal(
@@ -623,4 +656,3 @@
     </script>
 </body>
 </html>
-

@@ -16,17 +16,21 @@ const BLYNK_AUTH_TOKEN = process.env.BLYNK_AUTH_TOKEN;
 const BLYNK_API_BASE = 'https://blynk.cloud/external/api';
 
 // --- Polling and Offline Detection Configuration ---
-// MODIFIED: Polling rate is faster for a more responsive UI
 const POLLING_RATE_MS = 500;
 const STALE_POLL_THRESHOLD = 40;
 
-// --- VIRTUAL PIN DEFINITIONS (v8.0 Update) ---
-// MODIFIED: v6 is write-only from the server, so no need to poll it.
-const VIRTUAL_PINS_TO_POLL = ['v0', 'v1', 'v2', 'v4', 'v5'];
+// --- VIRTUAL PIN DEFINITIONS (v8.9-fix) ---
+const VPIN_TOTAL_VOLUME = 'v0';
+const VPIN_FLOW_RATE = 'v1';
+const VPIN_VALVE_STATUS = 'v2';
+const VPIN_VOLUME_LIMIT = 'v4';
 const UPTIME_PIN = 'v5';
 const CMD_ENABLE_HEARTBEAT_PIN = 'v6'; // PIN to enable/disable data sending from ESP32
 const CMD_OPEN_VALVE_PIN = 'v10';      // Pin to send the open command
 const CMD_CLOSE_VALVE_PIN = 'v11';     // Pin to send the close command for safety
+
+// MODIFIED v8.9-fix: Add all polled pins to an array
+const VIRTUAL_PINS_TO_POLL = [VPIN_TOTAL_VOLUME, VPIN_FLOW_RATE, VPIN_VALVE_STATUS, VPIN_VOLUME_LIMIT, UPTIME_PIN];
 
 // ===================================================================================
 // --- STATE MANAGEMENT ---
@@ -38,6 +42,11 @@ let consecutiveStalePolls = 0;
 let isDeviceOnline = false;
 let isPollingActive = false;
 let pollingTimeoutId = null;
+
+// NEW v8.9-fix: Implement the "State Enforcer"
+// This variable tracks what we *want* the valve state to be.
+// Can be 'unknown', 'open', or 'closed'.
+let desiredValveState = 'unknown';
 
 // ===================================================================================
 // --- STARTUP VALIDATION ---
@@ -60,7 +69,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(PORT, () => {
-    console.log(`🚀 EvaraTap Server v8.8 (Strict Limit & Fast UI) is running on port ${PORT}`);
+    console.log(`🚀 EvaraTap Server v8.9-fix (State Enforcer) is running on port ${PORT}`);
     console.log('[INFO] Waiting for client to initiate connection...');
 });
 
@@ -120,9 +129,37 @@ const pollBlynkData = async () => {
             broadcastDataUpdate();
 
             if (wasPreviouslyOffline) {
-                console.log(`[SAFETY] Device just reconnected. Sending command to ensure valve is closed.`);
-                await callBlynkApi('update', `${CMD_CLOSE_VALVE_PIN}=1`);
+                console.log(`[SAFETY] Device just reconnected. Setting desired state to CLOSED.`);
+                // NEW v8.9-fix: On reconnect, force the desired state to 'closed'.
+                // The enforcer logic below will handle sending the command.
+                desiredValveState = 'closed';
             }
+
+            // --- NEW v8.9-fix: "State Enforcer" Logic ---
+            // This logic runs *every* successful poll (500ms)
+            const actualValveState = parseInt(newData[VPIN_VALVE_STATUS] || 0); // 0 = closed, 1 = open
+            const totalVolume = parseFloat(newData[VPIN_TOTAL_VOLUME] || 0);
+            const volumeLimit = parseFloat(newData[VPIN_VOLUME_LIMIT] || 0);
+
+            if (desiredValveState === 'closed' && actualValveState === 1) {
+                // We *want* it closed, but it's *actually* open.
+                console.warn('[ENFORCER] State mismatch. Desired: CLOSED, Actual: OPEN. Forcing close...');
+                await callBlynkApi('update', `${CMD_CLOSE_VALVE_PIN}=1`);
+            
+            } else if (desiredValveState === 'open' && actualValveState === 0) {
+                // We *want* it open, but it's *actually* closed.
+                
+                // First, check the volume limit lock
+                if (volumeLimit > 0 && totalVolume >= volumeLimit) {
+                    console.warn('[ENFORCER] Desired: OPEN, but volume limit reached. Forcing state to CLOSED.');
+                    desiredValveState = 'closed'; // Give up trying to open
+                } else {
+                    // It's safe to open
+                    console.warn('[ENFORCER] State mismatch. Desired: OPEN, Actual: CLOSED. Forcing open...');
+                    await callBlynkApi('update', `${CMD_OPEN_VALVE_PIN}=1`);
+                }
+            }
+            // --- End of State Enforcer Logic ---
         }
     }
 
@@ -130,6 +167,7 @@ const pollBlynkData = async () => {
         console.warn(`🚨 [STATUS] OFFLINE: Stale data threshold reached.`);
         isDeviceOnline = false;
         isPollingActive = false;
+        desiredValveState = 'unknown'; // Reset desired state
         broadcastDataUpdate();
 
         console.log('[SAFETY] Initiating graceful shutdown sequence...');
@@ -154,6 +192,10 @@ app.post('/api/start-connection', async (req, res) => {
     }
     console.log('[API] Received request to start connection...');
     
+    // NEW v8.9-fix: When starting, set the desired state to 'closed'
+    // The ESP32 also forces a close on V6=1, this keeps them in sync.
+    desiredValveState = 'closed';
+
     const activationResult = await callBlynkApi('update', `${CMD_ENABLE_HEARTBEAT_PIN}=1`);
 
     if (!activationResult) {
@@ -169,6 +211,7 @@ app.post('/api/start-connection', async (req, res) => {
     res.status(202).json({ success: true, message: 'Activation sequence initiated.' });
 });
 
+// MODIFIED v8.9-fix: This endpoint now sets the "desiredState"
 app.post('/api/update-pin', async (req, res) => {
     const { pin, value } = req.body;
 
@@ -177,16 +220,26 @@ app.post('/api/update-pin', async (req, res) => {
     }
     console.log(`\n[CMD] Received command: Set ${pin} = ${value}`);
 
-    // NEW: Server-side check to prevent opening valve if limit is reached.
-    // This provides immediate feedback to the user.
+    // --- State Enforcer Logic ---
     if (pin === CMD_OPEN_VALVE_PIN) {
-        const totalVolume = parseFloat(deviceDataCache['v0'] || 0); // v0 is VPIN_TOTAL_VOLUME
-        const volumeLimit = parseFloat(deviceDataCache['v4'] || 0); // v4 is VPIN_VOLUME_LIMIT
+        // Server-side check to prevent opening valve if limit is reached.
+        const totalVolume = parseFloat(deviceDataCache[VPIN_TOTAL_VOLUME] || 0);
+        const volumeLimit = parseFloat(deviceDataCache[VPIN_VOLUME_LIMIT] || 0);
         if (volumeLimit > 0 && totalVolume >= volumeLimit) {
             console.log('[CMD-REJECT] Open valve command rejected: Volume limit reached.');
             return res.status(403).json({ error: 'Volume limit reached. Reset to continue.' });
         }
+        desiredValveState = 'open'; // Set the desired state
+    
+    } else if (pin === CMD_CLOSE_VALVE_PIN) {
+        desiredValveState = 'closed'; // Set the desired state
+    
+    } else if (pin === CMD_ENABLE_HEARTBEAT_PIN && value == 0) {
+        // This is the EMERGENCY STOP button
+        console.log('[CMD] Emergency Stop detected. Forcing desired state to CLOSED.');
+        desiredValveState = 'closed';
     }
+    // --- End State Enforcer ---
 
     let updateResult = await callBlynkApi('update', `${pin}=${value}`);
 
@@ -208,6 +261,8 @@ function broadcastDataUpdate() {
         type: isDeviceOnline ? 'data-update' : 'device-offline',
         payload: deviceDataCache,
         deviceOnline: isDeviceOnline,
+        // NEW v8.9-fix: Send the desired state to the dashboard (for future use)
+        desiredState: desiredValveState, 
         timestamp: Date.now()
     });
     wss.clients.forEach(client => {
@@ -221,9 +276,9 @@ wss.on('connection', (ws) => {
         type: 'initial-state',
         payload: deviceDataCache,
         deviceOnline: isDeviceOnline,
+        desiredState: desiredValveState,
         timestamp: Date.now()
     }));
     ws.on('close', () => console.log('[WSS] ❌ Client disconnected from WebSocket.'));
     ws.on('error', (error) => console.error('[WSS-ERROR] WebSocket client error:', error));
 });
-

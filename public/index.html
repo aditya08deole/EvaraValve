@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvaraValve Smart Flow Control v9.0 (Failsafe)</title>
+    <title>EvaraValve Smart Flow Control v9.1 (UI Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -30,10 +30,11 @@
         h1 { font-size: 2.8rem; margin-bottom: 10px; font-weight: 700; }
         p { font-size: 1.1rem; opacity: 0.9; }
 
+        /* --- UPDATED: Emergency Stop Button Positioning --- */
         .emergency-stop-btn {
             position: fixed; 
-            bottom: 20px; 
-            left: 20px; 
+            top: 30px;  /* Changed from bottom to top */
+            left: 30px; /* Shifted slightly right */
             z-index: 1003;
             background: linear-gradient(135deg, #e74c3c, #c03b2b); 
             color: white; 
@@ -64,6 +65,7 @@
         .emergency-stop-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+            filter: grayscale(0.5); /* Visual feedback for disabled state */
         }
 
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
@@ -198,7 +200,7 @@
             .emergency-stop-btn { 
                 font-size: 0.75rem; 
                 padding: 10px 14px; 
-                bottom: 15px; 
+                top: 20px; /* Adjusted for mobile */
                 left: 15px;
             }
         }
@@ -402,11 +404,6 @@
             }
             
             function updateDeviceOnlineStatus(isOnline) {
-                // MODIFIED v9.0: We remove the spinner removal from here
-                // It was causing a bug where a spinner would be removed by an unrelated
-                // online/offline event. Spinners are now *only* handled by sendCommandWithFeedback
-                // and updateUI.
-
                 if (isOnline) {
                     unlockSystemSafety();
                     DOMElements.deviceStatus.textContent = 'ONLINE';
@@ -414,7 +411,13 @@
                     DOMElements.offlineOverlay.classList.remove('show');
                     DOMElements.analyticsCard.style.opacity = '1';
                     DOMElements.analyticsCard.style.pointerEvents = 'auto';
+                    
+                    // --- UPDATED: Fix for Blocked Emergency Stop ---
                     DOMElements.emergencyStopBtn.classList.add('visible');
+                    DOMElements.emergencyStopBtn.disabled = false; // Fix: Re-enable button on connection
+                    DOMElements.emergencyStopBtn.classList.remove('pending'); // Fix: Remove any stuck spinner
+                    // ----------------------------------------------
+
                 } else {
                     lockSystemSafety('🛡️ System in Standby', 'Press the button below to activate the device and begin a session.', true);
                     DOMElements.deviceStatus.textContent = 'OFFLINE';
@@ -463,16 +466,11 @@
                 }
                 if (data[VPIN.VALVE_STATUS] !== undefined) {
                     const isOpen = parseInt(data[VPIN.VALVE_STATUS]) === 1;
-                    
-                    // This is the "real" state. We update our UI to match.
                     DOMElements.valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
                     DOMElements.valveStatus.className = isOpen ? 'status-value open' : 'status-value closed';
                     DOMElements.openBtn.disabled = isOpen || isLimitReached;
                     DOMElements.closeBtn.disabled = !isOpen;
                     
-                    // MODIFIED v9.0: If the "real" state has been updated,
-                    // we can safely remove any spinners. This is our
-                    // "confirmation" that the optimistic UI is now correct.
                     if (isOpen) {
                         DOMElements.openBtn.classList.remove('pending');
                     } else {
@@ -507,24 +505,13 @@
                     }
                     
                     showToast(successMessage || result.message, 'success');
-                    
-                    // MODIFIED v9.0: This is the fix for the "long buffer"
-                    // We remove the spinner *immediately* on success.
-                    // The "Optimistic UI" has already changed the text.
-                    // The server's enforcer will handle retries.
-                    // This makes the button feel instant.
                     buttonEl.classList.remove('pending');
 
                 } catch (error) {
                     console.error("Command failed:", error);
                     showToast(error.message, 'error');
-                    
-                    // On error, we also remove the spinner.
                     buttonEl.classList.remove('pending');
                     
-                    // Important: We DON'T know the state, so we disable *both*
-                    // buttons until the next updateUI() call tells us the
-                    // real state.
                     DOMElements.openBtn.disabled = true;
                     DOMElements.closeBtn.disabled = true;
                 }
@@ -594,23 +581,19 @@
                         return;
                     }
 
-                    // --- Optimistic Update ---
                     DOMElements.valveStatus.textContent = 'OPEN';
                     DOMElements.valveStatus.className = 'status-value open';
                     DOMElements.openBtn.disabled = true;
                     DOMElements.closeBtn.disabled = false;
-                    // --- End Optimistic Update ---
 
                     sendCommandWithFeedback(DOMElements.openBtn, VPIN.CMD_OPEN_VALVE, 1, 'Valve open command sent.');
                 });
                 
                 DOMElements.closeBtn.addEventListener('click', () => {
-                    // --- Optimistic Update ---
                     DOMElements.valveStatus.textContent = 'CLOSED';
                     DOMElements.valveStatus.className = 'status-value closed';
                     DOMElements.openBtn.disabled = false;
                     DOMElements.closeBtn.disabled = true;
-                    // --- End Optimistic Update ---
                     
                     sendCommandWithFeedback(DOMElements.closeBtn, VPIN.CMD_CLOSE_VALVE, 1, 'Valve close command sent.');
                 });
@@ -639,7 +622,6 @@
                     );
                 });
 
-                // --- Modal Event Listeners ---
                 DOMElements.modalConfirmBtn.addEventListener('click', () => {
                     if (typeof confirmCallback === 'function') {
                         confirmCallback();
@@ -654,7 +636,6 @@
                 });
             }
 
-            // --- Initialise Application ---
             initializeGauge();
             setupEventListeners();
             lockSystemSafety('🛡️ System in Standby', 'Press the button below to activate the device and begin a session.', true);
